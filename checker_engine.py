@@ -707,7 +707,7 @@ class CheckerEngine:
             elapsed_since_last = now - self._last_check_time
             if elapsed_since_last < min_gap:
                 wait_time = min_gap - elapsed_since_last
-            self._last_check_time = time.time()
+            self._last_check_time = now + wait_time
         if wait_time > 0:
             time.sleep(wait_time)
 
