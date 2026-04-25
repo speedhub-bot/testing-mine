@@ -55,7 +55,7 @@ async def run_checker(task: CheckTask):
     user = db.get_user(task.user_id)
     is_admin = user[3] == 'admin'
     settings = db.get_settings(task.user_id)
-    max_threads = 50 if is_admin else 25
+    max_threads = 20 if is_admin else 10
     threads = min(settings.threads, max_threads)
 
     loop = asyncio.get_event_loop()
