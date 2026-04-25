@@ -401,6 +401,7 @@ class CheckerEngine:
                 discord_notifier.send_2fa_webhook(email, password, self.config)
                 with self.lock:
                     self.twofa += 1
+                self.db.update_stats(self.user_id, errors=1)
                 return
 
             if not token:
