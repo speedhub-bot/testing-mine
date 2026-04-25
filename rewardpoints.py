@@ -4,6 +4,10 @@ import requests
 from urllib.parse import urlparse, parse_qs
 
 
+def _account_label(email: str) -> str:
+    return email
+
+
 def _get_auth_token(session, client_id, scope, redirect_uri, config, token_cache=None):
     cache_key = f'{client_id}:{scope}:{redirect_uri}'
     if token_cache is not None and cache_key in token_cache:
@@ -83,6 +87,6 @@ def fetch_rewards(session, email, password, config, fname, write_dedupe, token_c
         return None
     points = check_rewards_points(session, config, token_cache)
     if points:
-        write_dedupe(fname, 'Ms_Points.txt', f'{email}:{password} | Points: {points}\n')
+        write_dedupe(fname, 'Ms_Points.txt', f'{_account_label(email)} | Points: {points}\n')
         return points
     return None

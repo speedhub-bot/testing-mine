@@ -1,6 +1,8 @@
-# Ultimate Minecraft Checker Bot v2.0
+# Safe Minecraft Account Checker Bot v2.1
 
-A powerful Telegram bot for checking Minecraft account entitlements via Microsoft authentication with advanced capture, Discord webhooks, and a polished UI.
+A Telegram bot for checking Minecraft account entitlements on accounts you are authorized to check.
+
+This fork removes bulk combo checking, proxy rotation, Discord hit reporting, inbox/payment/cookie capture, buddy-pass claiming, and automatic account changes.
 
 ## Setup
 
@@ -20,38 +22,26 @@ A powerful Telegram bot for checking Minecraft account entitlements via Microsof
    python main.py
    ```
 
-## What's New in v2.0
+## What's New in v2.1-safe
 
-- **Redesigned UI** — Rich formatted messages with tree-view layouts, progress bars, and 2-column keyboards
-- **Enhanced Progress** — Live progress bar with ETA, CPM, hit rate, and elapsed time
-- **Richer Captures** — Sectioned Capture.txt output (`[HYPIXEL]`, `[MICROSOFT]`, `[DONUTSMP]`, etc.)
-- **Better Hits** — hits.txt now includes capes, Skywars stars, SB level, email access, payments, donut stats, and inbox matches
-- **Upgraded Discord Embeds** — Timestamps, color-coded by account type (Hypixel/GamePass/Normal), player body render via Crafatar, spoiler-tagged credentials
-- **/help command** — In-bot help with full feature list and usage guide
-- **Quick Check button** — Step-by-step guide accessible from main menu
-- **No Proxy button** — One-tap "check without proxies" after uploading combos
-- **Detailed completion summary** — Hit rate, average CPM, and total duration
-- **Better Admin Panel** — User breakdown by role, hit rate stats, 2-column action buttons
+- **Single-account checks only** — send one authorized `email:password` line at a time
+- **No bulk combo files** — uploaded text files are rejected
+- **No proxy support** — checks run directly
+- **No Discord webhooks** — hit reporting integrations were removed
+- **No harvesting modules** — inbox, payment, billing, cookies, buddy-pass claiming, and auto name/skin changes are disabled/removed
+- **Safer diagnostics** — entitlement type, Minecraft profile, public game stats, rewards points, and optional ban/cape/name-change checks
 
 ## Features
 
-- Microsoft account authentication and Minecraft entitlement checking
+- Microsoft account authentication and Minecraft entitlement checking for authorized accounts
 - Hypixel stats lookup (via soopy.dev API)
 - DonutSMP stats (money, kills, deaths, playtime, shards, blocks)
 - Hypixel ban detection via pyCraft
-- Email access (IMAP) checking
-- Microsoft Balance, Rewards Points, Payment Methods, and Subscriptions
-- Xbox Game Pass buddy-pass code generation
+- Microsoft Rewards Points
 - Optifine cape detection
 - Name change status
-- Inbox keyword scanning (Outlook Substrate API)
-- Auto name/skin setting
-- Cookie saving
-- Discord webhook notifications (embed and plain-text modes)
-- Auto proxy scraping from public APIs
 - Multi-user support with admin panel, user authorization, and broadcasting
-- Configurable capture modules per user (17 toggleable modules)
-- Queue system with concurrent worker support
+- Configurable safe diagnostic modules per user
 
 ## Credits
 

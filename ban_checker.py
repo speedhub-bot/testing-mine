@@ -1,21 +1,12 @@
 """
 ban_checker.py — Hypixel ban check via pyCraft connection to alpha.hypixel.net
-Extracted from MSMC.py / meow.py ban checking logic.
 """
 import json
-import random
-import socket
 import threading
 import time
 import uuid as uuid_mod
 from io import StringIO
 import sys
-
-try:
-    import socks
-    SOCKS_AVAILABLE = True
-except ImportError:
-    SOCKS_AVAILABLE = False
 
 try:
     from minecraft.networking.connection import Connection
@@ -26,8 +17,9 @@ try:
 except ImportError:
     PYCRAFT_AVAILABLE = False
 
-_proxy_lock = threading.Lock()
 
+def _account_label(email: str) -> str:
+    return email
 
 def check_hypixel_ban(
     capture_obj,
@@ -35,8 +27,6 @@ def check_hypixel_ban(
     name: str,
     uuid_val: str,
     session,
-    banproxies: list,
-    proxy_lock: threading.Lock,
     fname: str,
     write_dedupe,
     file_lock: threading.Lock,
@@ -92,7 +82,7 @@ def check_hypixel_ban(
                     except Exception:
                         pass
                     capture_obj.banned = f'[Permanently] Suspicious activity detected. Ban ID: {ban_id}'
-                    write_dedupe(fname, 'Banned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                    write_dedupe(fname, 'Banned.txt', f'{_account_label(capture_obj.email)}\n')
                 elif 'temporarily banned' in data_str:
                     duration = ''
                     reason = ''
@@ -104,7 +94,7 @@ def check_hypixel_ban(
                     except Exception:
                         pass
                     capture_obj.banned = f'[{duration}] {reason} Ban ID: {ban_id}'
-                    write_dedupe(fname, 'Banned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                    write_dedupe(fname, 'Banned.txt', f'{_account_label(capture_obj.email)}\n')
                 elif 'You are permanently banned from this server!' in data_str:
                     reason = ''
                     ban_id = ''
@@ -114,20 +104,20 @@ def check_hypixel_ban(
                     except Exception:
                         pass
                     capture_obj.banned = f'[Permanently] {reason} Ban ID: {ban_id}'
-                    write_dedupe(fname, 'Banned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                    write_dedupe(fname, 'Banned.txt', f'{_account_label(capture_obj.email)}\n')
                 elif 'The Hypixel Alpha server is currently closed!' in data_str:
                     capture_obj.banned = 'False'
-                    write_dedupe(fname, 'Unbanned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                    write_dedupe(fname, 'Unbanned.txt', f'{_account_label(capture_obj.email)}\n')
                 elif 'Failed cloning your SkyBlock data' in data_str:
                     capture_obj.banned = 'False'
-                    write_dedupe(fname, 'Unbanned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                    write_dedupe(fname, 'Unbanned.txt', f'{_account_label(capture_obj.email)}\n')
                 else:
                     try:
                         msg = ''.join(item.get('text', '') for item in data.get('extra', []))
                     except Exception:
                         msg = data_str[:200]
                     capture_obj.banned = msg or '[Unknown disconnect]'
-                    write_dedupe(fname, 'Banned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                    write_dedupe(fname, 'Banned.txt', f'{_account_label(capture_obj.email)}\n')
             except Exception as e:
                 capture_obj.banned = f'[Error] Packet parse: {e}'
 
@@ -135,36 +125,9 @@ def check_hypixel_ban(
         def joined_server(packet):
             if capture_obj.banned is None:
                 capture_obj.banned = 'False'
-                write_dedupe(fname, 'Unbanned.txt', f'{capture_obj.email}:{capture_obj.password}\n')
+                write_dedupe(fname, 'Unbanned.txt', f'{_account_label(capture_obj.email)}\n')
 
         try:
-            # Apply SOCKS5 proxy for ban checking if available
-            if banproxies and SOCKS_AVAILABLE:
-                with _proxy_lock:
-                    proxy = random.choice(banproxies)
-                try:
-                    if '@' in proxy:
-                        at_split = proxy.split('@')
-                        creds = at_split[0].split(':')
-                        addr_port = at_split[1].split(':')
-                        socks.set_default_proxy(
-                            socks.SOCKS5,
-                            addr=addr_port[0],
-                            port=int(addr_port[1]),
-                            username=creds[0],
-                            password=creds[1]
-                        )
-                    else:
-                        ip_port = proxy.split(':')
-                        socks.set_default_proxy(
-                            socks.SOCKS5,
-                            addr=ip_port[0],
-                            port=int(ip_port[1])
-                        )
-                    socket.socket = socks.socksocket
-                except Exception:
-                    pass
-
             original_stderr = sys.stderr
             sys.stderr = StringIO()
             try:

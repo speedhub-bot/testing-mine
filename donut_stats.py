@@ -30,6 +30,10 @@ def _format_seconds(seconds_value):
     return ' '.join(parts)
 
 
+def _account_label(email: str) -> str:
+    return email
+
+
 def _duration_to_days(text):
     if not text:
         return None
@@ -100,7 +104,7 @@ def _parse_ban_info(ban_text):
 
 
 def fetch_donut_stats(username, email, password, banned, fname, file_lock,
-                      config, getproxy, proxytype,
+                      config,
                       write_dedupe=None,
                       UI_ENABLED=False, ui=None,
                       donut_api_url=DONUT_API_URL):
@@ -133,62 +137,27 @@ def fetch_donut_stats(username, email, password, banned, fname, file_lock,
         session.mount('https://', adapter)
         session.mount('http://', adapter)
 
-        proxy_candidates = []
-        if proxytype != "'4'":
-            try:
-                for _ in range(4):
-                    p = getproxy()
-                    if p:
-                        proxy_candidates.append(p)
-            except Exception:
-                pass
-
-        seen = set()
-        unique = []
-        for p in proxy_candidates:
-            key = str(p)
-            if key not in seen:
-                seen.add(key)
-                unique.append(p)
-        proxy_candidates = unique + [None]
-
-        valid_proxies = []
-        for p in proxy_candidates:
-            try:
-                r = session.get('https://api.donutsmp.net/index.html', headers=headers, proxies=p, verify=False, timeout=10)
-                if r.status_code == 200:
-                    valid_proxies.append(p)
-                elif UI_ENABLED and ui:
-                    ui.log_info(f"Donut SMP: preflight {r.status_code}{' (no proxy)' if p is None else ''}")
-            except Exception as e:
-                if UI_ENABLED and ui:
-                    ui.log_info(f"Donut SMP: preflight failed {'(no proxy)' if p is None else ''} - {e.__class__.__name__}: {str(e)[:160]}")
-
-        if not valid_proxies:
-            valid_proxies = [None]
-
         response = None
-        for idx, p in enumerate(valid_proxies):
+        for idx in range(3):
             try:
-                r = session.get(f'{donut_api_url}{username}', headers=headers, proxies=p, verify=False, timeout=20)
+                r = session.get(f'{donut_api_url}{username}', headers=headers, verify=False, timeout=20)
                 time.sleep(0.3 * (idx + 1))
                 if r.status_code == 200 or r.status_code in (401, 404, 429):
                     response = r
                     break
                 else:
                     if UI_ENABLED and ui:
-                        ui.log_info(f"Donut SMP: server error {r.status_code} on attempt {idx + 1}{' (no proxy)' if p is None else ''}")
+                        ui.log_info(f"Donut SMP: server error {r.status_code} on attempt {idx + 1}")
                     continue
             except (
                 requests.exceptions.ConnectionError,
                 requests.exceptions.Timeout,
                 requests.exceptions.RetryError,
-                requests.exceptions.ProxyError,
                 requests.exceptions.SSLError,
                 requests.exceptions.InvalidSchema
             ) as e:
                 if UI_ENABLED and ui:
-                    ui.log_info(f"Donut SMP: connection failed on attempt {idx + 1}{' (no proxy)' if p is None else ''} - {e.__class__.__name__}: {str(e)[:160]}")
+                    ui.log_info(f"Donut SMP: connection failed on attempt {idx + 1} - {e.__class__.__name__}: {str(e)[:160]}")
                 continue
 
         if response is None:
@@ -208,7 +177,7 @@ def fetch_donut_stats(username, email, password, banned, fname, file_lock,
 
             if isinstance(stats_data, dict):
                 stats_lines = [
-                    f'{email}:{password}',
+                    _account_label(email),
                     f'Username: {username}',
                 ]
 
