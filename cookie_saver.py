@@ -19,7 +19,7 @@ def save_cookies(
     try:
         # Sanitise account_type for use as a directory name
         safe_type = account_type.replace(' ', '_').replace('/', '_').replace('\\', '_')
-        cookie_dir = os.path.join('results', fname, 'Cookies', safe_type)
+        cookie_dir = os.path.join(fname, 'Cookies', safe_type)
         os.makedirs(cookie_dir, exist_ok=True)
 
         cookie_path = os.path.join(cookie_dir, f'{name}.txt')

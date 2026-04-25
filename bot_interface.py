@@ -5,8 +5,10 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from database import Database
 
-TOKEN = os.getenv("BOT_TOKEN", "8459126546:AAHN9oT3OzcM74yHPINr7mjJWHTyYbvkn_g")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "5944410248"))
+TOKEN = os.getenv("BOT_TOKEN", "")
+if not TOKEN:
+    raise RuntimeError("BOT_TOKEN environment variable is required")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
