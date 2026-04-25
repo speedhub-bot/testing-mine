@@ -16,9 +16,9 @@ RE_RETURN_URL = re.compile(r'window.location.replace\("([^"]+)"\)')
 
 def microsoft_login(session, email, password):
     """
-    Performs Microsoft Login and returns (token, xbox_token).
+    Performs Microsoft Login and returns (mc_token, xbox_token).
     Returns ("2FA", None) if 2FA is encountered.
-    Returns (None, None) if login fails.
+    Returns (None, None) if login fails or token exchange fails.
     """
     try:
         # Step 1: Get PPFT and urlPost
@@ -59,71 +59,92 @@ def microsoft_login(session, email, password):
         login_resp = session.post(urlPost, data=data, headers=headers, allow_redirects=True, timeout=15)
 
         if '#' in login_resp.url:
-            token = parse_qs(urlparse(login_resp.url).fragment).get('access_token', [None])[0]
+            ms_token = parse_qs(urlparse(login_resp.url).fragment).get('access_token', [None])[0]
         else:
             # Check for 2FA or errors
             if any(v in login_resp.text for v in ['recover?mkt', 'identity/confirm', 'Email/Confirm', '/Abuse?mkt=']):
                 return "2FA", None
             return None, None
 
-        if not token:
+        if not ms_token:
             return None, None
 
-        # Step 3: Exchange for XBL Token
-        xbl_resp = session.post(
-            'https://user.auth.xboxlive.com/user/authenticate',
-            json={
-                'Properties': {
-                    'AuthMethod': 'RPS',
-                    'SiteName': 'user.auth.xboxlive.com',
-                    'RpsTicket': f'd={token}'
+        # Step 3: Exchange for XBL Token (with retry for rate limits)
+        xbl_token = None
+        uhs = None
+        for attempt in range(3):
+            xbl_resp = session.post(
+                'https://user.auth.xboxlive.com/user/authenticate',
+                json={
+                    'Properties': {
+                        'AuthMethod': 'RPS',
+                        'SiteName': 'user.auth.xboxlive.com',
+                        'RpsTicket': f'd={ms_token}'
+                    },
+                    'RelyingParty': 'http://auth.xboxlive.com/',
+                    'TokenType': 'JWT'
                 },
-                'RelyingParty': 'http://auth.xboxlive.com/',
-                'TokenType': 'JWT'
-            },
-            headers={'Content-Type': 'application/json', 'Accept': 'application/json'}
-        )
+                headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
+                timeout=15,
+            )
+            if xbl_resp.status_code == 200:
+                xbl_data = xbl_resp.json()
+                xbl_token = xbl_data.get('Token')
+                uhs = xbl_data.get('DisplayClaims', {}).get('xui', [{}])[0].get('uhs')
+                break
+            if xbl_resp.status_code == 429:
+                time.sleep(2 + attempt)
+                continue
+            return None, None
+        if not xbl_token or not uhs:
+            return None, None
 
-        if xbl_resp.status_code != 200:
-            return token, None
-
-        xbl_data = xbl_resp.json()
-        xbl_token = xbl_data.get('Token')
-        uhs = xbl_data.get('DisplayClaims', {}).get('xui', [{}])[0].get('uhs')
-
-        # Step 4: Exchange for XSTS Token
-        xsts_resp = session.post(
-            'https://xsts.auth.xboxlive.com/xsts/authorize',
-            json={
-                'Properties': {
-                    'SandboxId': 'RETAIL',
-                    'UserTokens': [xbl_token]
+        # Step 4: Exchange for XSTS Token (with retry for rate limits)
+        xsts_token = None
+        for attempt in range(3):
+            xsts_resp = session.post(
+                'https://xsts.auth.xboxlive.com/xsts/authorize',
+                json={
+                    'Properties': {
+                        'SandboxId': 'RETAIL',
+                        'UserTokens': [xbl_token]
+                    },
+                    'RelyingParty': 'rp://api.minecraftservices.com/',
+                    'TokenType': 'JWT'
                 },
-                'RelyingParty': 'rp://api.minecraftservices.com/',
-                'TokenType': 'JWT'
-            },
-            headers={'Content-Type': 'application/json', 'Accept': 'application/json'}
-        )
+                headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
+                timeout=15,
+            )
+            if xsts_resp.status_code == 200:
+                xsts_token = xsts_resp.json().get('Token')
+                break
+            if xsts_resp.status_code == 429:
+                time.sleep(2 + attempt)
+                continue
+            return None, None
+        if not xsts_token:
+            return None, None
 
-        if xsts_resp.status_code != 200:
-            return token, None
+        # Step 5: Get Minecraft Token (with retry for rate limits)
+        for attempt in range(3):
+            mc_resp = session.post(
+                'https://api.minecraftservices.com/authentication/login_with_xbox',
+                json={
+                    'identityToken': f'XBL3.0 x={uhs};{xsts_token}'
+                },
+                timeout=15,
+            )
+            if mc_resp.status_code == 200:
+                final_token = mc_resp.json().get('access_token')
+                if final_token:
+                    return final_token, xbl_token
+                return None, None
+            if mc_resp.status_code == 429:
+                time.sleep(2 + attempt)
+                continue
+            return None, None
 
-        xsts_data = xsts_resp.json()
-        xsts_token = xsts_data.get('Token')
-
-        # Step 5: Get Minecraft Token
-        mc_resp = session.post(
-            'https://api.minecraftservices.com/authentication/login_with_xbox',
-            json={
-                'identityToken': f'XBL3.0 x={uhs};{xsts_token}'
-            }
-        )
-
-        if mc_resp.status_code != 200:
-            return token, None
-
-        final_token = mc_resp.json().get('access_token')
-        return final_token, xbl_token
+        return None, None
 
     except Exception:
         return None, None
