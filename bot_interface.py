@@ -447,8 +447,13 @@ async def toggle_format(callback: types.CallbackQuery):
 async def set_threads_prompt(callback: types.CallbackQuery):
     _waiting_state[callback.from_user.id] = 'threads'
     user = db.get_user(callback.from_user.id)
-    max_t = 50 if user[3] == 'admin' else 25
-    await callback.message.edit_text(f"🧵 Send the number of threads (1-{max_t}):")
+    max_t = 20 if user[3] == 'admin' else 10
+    await callback.message.edit_text(
+        f"🧵 Send the number of threads (1-{max_t}):\n\n"
+        f"<i>⚠️ Higher threads = higher CPM = higher IP ban risk.\n"
+        f"Recommended: 3-5 for accuracy, 10 max for speed.</i>",
+        parse_mode="HTML"
+    )
 
 # ─────────────────────────── TEXT INPUT HANDLER ───────────────────────────
 
@@ -462,7 +467,7 @@ async def handle_text_input(message: types.Message):
 
     if state == 'threads':
         try:
-            val = max(1, min(int(text), 50 if db.get_user(user_id)[3] == 'admin' else 25))
+            val = max(1, min(int(text), 20 if db.get_user(user_id)[3] == 'admin' else 10))
             db.update_settings(user_id, threads=val)
             await message.reply(f"✅ Threads set to {val}.", reply_markup=get_main_keyboard(user_id))
         except ValueError:
