@@ -1,3 +1,4 @@
+import os
 import re
 import time
 import requests
@@ -211,28 +212,42 @@ def fetch_donut_stats(username, email, password, banned, fname, file_lock,
                     f'Username: {username}',
                 ]
 
+                parsed_stats = {}
+
                 if stats_data.get('broken_blocks'):
                     stats_lines.append(f"broken_blocks: {stats_data['broken_blocks']}")
+                    parsed_stats['broken_blocks'] = str(stats_data['broken_blocks'])
                 if stats_data.get('deaths'):
                     stats_lines.append(f"deaths: {stats_data['deaths']}")
+                    parsed_stats['deaths'] = str(stats_data['deaths'])
                 if stats_data.get('kills'):
                     stats_lines.append(f"kills: {stats_data['kills']}")
+                    parsed_stats['kills'] = str(stats_data['kills'])
                 if stats_data.get('mobs_killed'):
                     stats_lines.append(f"mobs_killed: {stats_data['mobs_killed']}")
+                    parsed_stats['mobs_killed'] = str(stats_data['mobs_killed'])
                 if stats_data.get('money'):
                     stats_lines.append(f"money: {stats_data['money']}")
+                    parsed_stats['money'] = str(stats_data['money'])
                 if stats_data.get('money_made_from_sell'):
                     stats_lines.append(f"money_made_from_sell: {stats_data['money_made_from_sell']}")
+                    parsed_stats['money_made_from_sell'] = str(stats_data['money_made_from_sell'])
                 if stats_data.get('money_spent_on_shop'):
                     stats_lines.append(f"money_spent_on_shop: {stats_data['money_spent_on_shop']}")
+                    parsed_stats['money_spent_on_shop'] = str(stats_data['money_spent_on_shop'])
                 if stats_data.get('placed_blocks'):
                     stats_lines.append(f"placed_blocks: {stats_data['placed_blocks']}")
+                    parsed_stats['placed_blocks'] = str(stats_data['placed_blocks'])
                 if stats_data.get('playtime'):
                     try:
                         raw_playtime = stats_data['playtime']
                         stats_lines.append(f'playtime: {raw_playtime} ({_format_seconds(raw_playtime)})')
+                        parsed_stats['playtime'] = _format_seconds(raw_playtime)
                     except Exception:
                         stats_lines.append(f"playtime: {stats_data['playtime']}")
+                        parsed_stats['playtime'] = str(stats_data['playtime'])
+                if stats_data.get('shards'):
+                    parsed_stats['shards'] = str(stats_data['shards'])
 
                 if banned is not None:
                     if banned and banned != 'False':
@@ -254,10 +269,11 @@ def fetch_donut_stats(username, email, password, banned, fname, file_lock,
                         write_dedupe(fname, 'donut_stats.txt', content)
                     else:
                         with file_lock:
-                            with open(f'results/{fname}/donut_stats.txt', 'a', encoding='utf-8') as f:
+                            with open(os.path.join(fname, 'donut_stats.txt'), 'a', encoding='utf-8') as f:
                                 f.write(content)
                     if UI_ENABLED and ui:
                         ui.log_info(f'Donut SMP stats saved for {username}')
+                    return parsed_stats
 
         elif response.status_code == 404:
             if UI_ENABLED and ui:
@@ -280,3 +296,4 @@ def fetch_donut_stats(username, email, password, banned, fname, file_lock,
     except Exception as e:
         if UI_ENABLED and ui:
             ui.log_info(f'Donut SMP error: {str(e)[:100]}')
+    return None

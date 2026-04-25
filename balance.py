@@ -15,7 +15,7 @@ def _get_auth_token(session, client_id, scope, redirect_uri, config, token_cache
         auth_url = (
             f'https://login.live.com/oauth20_authorize.srf'
             f'?client_id={client_id}&response_type=token&scope={scope}'
-
+            f'&redirect_uri={redirect_uri}&prompt=none'
         )
         r = session.get(auth_url, timeout=int(config.get('timeout', 10)))
         token = parse_qs(urlparse(r.url).fragment).get('access_token', [None])[0]
