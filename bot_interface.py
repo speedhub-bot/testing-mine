@@ -5,10 +5,8 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from database import Database
 
-TOKEN = os.getenv("BOT_TOKEN", "")
-if not TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is required")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+TOKEN = os.getenv("BOT_TOKEN", "8459126546:AAHN9oT3OzcM74yHPINr7mjJWHTyYbvkn_g")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "5944410248"))
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -17,11 +15,19 @@ db = Database()
 # State tracking for text input flows
 _waiting_state = {}  # user_id -> state_name
 
+VERSION = '2.0'
+
 def get_main_keyboard(user_id):
     builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="⚙️ Configure", callback_data="configure"))
-    builder.row(types.InlineKeyboardButton(text="📊 My Stats", callback_data="my_stats"))
-    builder.row(types.InlineKeyboardButton(text="👤 Profile", callback_data="profile"))
+    builder.row(
+        types.InlineKeyboardButton(text="🎯 Check", callback_data="how_to_check"),
+        types.InlineKeyboardButton(text="⚙️ Configure", callback_data="configure"),
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📊 Stats", callback_data="my_stats"),
+        types.InlineKeyboardButton(text="👤 Profile", callback_data="profile"),
+    )
+    builder.row(types.InlineKeyboardButton(text="❓ Help", callback_data="help_menu"))
     if user_id == ADMIN_ID:
         builder.row(types.InlineKeyboardButton(text="👑 Admin Panel", callback_data="admin_panel"))
     return builder.as_markup()
@@ -34,49 +40,191 @@ async def cmd_start(message: types.Message):
         db.add_user(user_id, message.from_user.username, message.from_user.full_name)
         if user_id != ADMIN_ID:
             try:
-                await bot.send_message(ADMIN_ID, f"🆕 New auth request from @{message.from_user.username} ({user_id})")
+                await bot.send_message(
+                    ADMIN_ID,
+                    f"🆕 <b>New Auth Request</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 User: @{message.from_user.username}\n"
+                    f"🆔 ID: <code>{user_id}</code>\n"
+                    f"📛 Name: {message.from_user.full_name}\n"
+                    f"━━━━━━━━━━━━━━━━━━",
+                    parse_mode="HTML"
+                )
             except Exception:
                 pass
-            await message.reply("👋 Welcome! Your access is pending admin approval.")
+            await message.reply(
+                "👋 <b>Welcome to Ultimate MC Checker!</b>\n\n"
+                "Your access request has been sent to the admin.\n"
+                "You'll be notified once approved.",
+                parse_mode="HTML"
+            )
             return
         else:
             db.update_user_role(user_id, 'admin')
     user = db.get_user(user_id)
     if user[3] == 'pending' and user_id != ADMIN_ID:
-        await message.reply("⏳ Your access is still pending admin approval.")
+        await message.reply(
+            "⏳ <b>Pending Approval</b>\n\n"
+            "Your access is still pending admin review.\n"
+            "Please wait for authorization.",
+            parse_mode="HTML"
+        )
         return
     if user[3] == 'banned':
         await message.reply("🚫 You are banned from using this bot.")
         return
+    stats = db.get_user_stats(user_id)
+    total = stats[1] if stats else 0
+    hits = stats[2] if stats else 0
+    role_badge = '👑' if user[3] == 'admin' else '⭐'
     await message.reply(
-        f"🚀 <b>Ultimate Minecraft Checker Bot</b>\n\nWelcome back, {message.from_user.first_name}!\n\nCredits: @akaza_isnt",
+        f"╔══════════════════════════╗\n"
+        f"  ⚡ <b>Ultimate MC Checker v{VERSION}</b>\n"
+        f"╚══════════════════════════╝\n\n"
+        f"Welcome back, <b>{message.from_user.first_name}</b>! {role_badge}\n\n"
+        f"📊 <b>Quick Stats:</b>\n"
+        f"  ├ 🔄 Checked: <code>{total:,}</code>\n"
+        f"  ├ 🎯 Hits: <code>{hits:,}</code>\n"
+        f"  └ 📈 Hit Rate: <code>{(hits/total*100) if total > 0 else 0:.1f}%</code>\n\n"
+        f"📎 Send a <b>.txt combo file</b> to start checking!\n\n"
+        f"<i>Credits: @akaza_isnt</i>",
         parse_mode="HTML", reply_markup=get_main_keyboard(user_id)
+    )
+
+@dp.message(Command("help"))
+async def cmd_help(message: types.Message):
+    await message.reply(
+        f"❓ <b>Help — Ultimate MC Checker v{VERSION}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<b>How to use:</b>\n"
+        f"1️⃣ Send a <code>.txt</code> file with combos (email:pass)\n"
+        f"2️⃣ Optionally send a proxy file, or /noproxy\n"
+        f"3️⃣ Bot checks accounts and sends results\n\n"
+        f"<b>Commands:</b>\n"
+        f"  /start — Main menu\n"
+        f"  /help — This help message\n"
+        f"  /noproxy — Check without proxies\n\n"
+        f"<b>Captures include:</b>\n"
+        f"  • Minecraft entitlements (Normal/GamePass/Hypixel)\n"
+        f"  • Hypixel stats, BW/SW stars, Skyblock NW\n"
+        f"  • DonutSMP stats (kills, money, playtime)\n"
+        f"  • Optifine cape, name change status\n"
+        f"  • MS Balance, Rewards, Payment Methods\n"
+        f"  • Email access, Inbox scan, Subscriptions\n"
+        f"  • Buddy pass codes, Cookie saving\n"
+        f"  • Auto name/skin, Discord webhooks\n\n"
+        f"<i>Credits: @akaza_isnt</i>",
+        parse_mode="HTML", reply_markup=get_main_keyboard(message.from_user.id)
+    )
+
+@dp.callback_query(F.data == "how_to_check")
+async def how_to_check(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        "🎯 <b>How to Check Accounts</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>Step 1:</b> Send a <code>.txt</code> file with combos\n"
+        "  Format: <code>email:password</code> (one per line)\n\n"
+        "<b>Step 2:</b> Send proxy file or use /noproxy\n"
+        "  Supports HTTP/SOCKS4/SOCKS5 proxies\n\n"
+        "<b>Step 3:</b> Bot queues and checks automatically\n"
+        "  Live progress bar updates every 5s\n\n"
+        "<b>Step 4:</b> Results delivered as files\n"
+        "  Hits, captures, and categorized output\n\n"
+        "💡 <b>Tip:</b> Configure capture modules in ⚙️ Settings\n"
+        "to customize what data gets collected!",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardBuilder().row(
+            types.InlineKeyboardButton(text="🔙 Back", callback_data="back_to_main")
+        ).as_markup()
+    )
+
+@dp.callback_query(F.data == "help_menu")
+async def help_menu(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        f"❓ <b>Help — Ultimate MC Checker v{VERSION}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<b>Commands:</b>\n"
+        f"  /start — Main menu\n"
+        f"  /help — Help message\n"
+        f"  /noproxy — Check without proxies\n\n"
+        f"<b>Supported Captures:</b>\n"
+        f"  🎮 Minecraft entitlements\n"
+        f"  📊 Hypixel stats & rankings\n"
+        f"  🍩 DonutSMP stats\n"
+        f"  🧢 Optifine cape detection\n"
+        f"  💰 MS Balance & Rewards\n"
+        f"  💳 Payment methods & billing\n"
+        f"  📧 Email access & inbox scan\n"
+        f"  🎁 Buddy pass codes\n"
+        f"  🔄 Auto name/skin change\n\n"
+        f"<i>Credits: @akaza_isnt</i>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardBuilder().row(
+            types.InlineKeyboardButton(text="🔙 Back", callback_data="back_to_main")
+        ).as_markup()
     )
 
 @dp.callback_query(F.data == "profile")
 async def process_profile(callback: types.CallbackQuery):
     user = db.get_user(callback.from_user.id)
     stats = db.get_user_stats(callback.from_user.id)
+    total = stats[1] if stats else 0
+    hits = stats[2] if stats else 0
+    bad = stats[3] if stats else 0
+    errors = stats[4] if stats else 0
+    hit_rate = (hits / total * 100) if total > 0 else 0
+    role_icons = {'admin': '👑', 'authorized': '⭐', 'pending': '⏳', 'banned': '🚫'}
+    role_icon = role_icons.get(user[3], '👤')
     text = (
-        f"👤 <b>Your Profile</b>\n━━━━━━━━━━━━━━\n"
-        f"🆔 ID: <code>{user[0]}</code>\n📛 Name: {user[2]}\n"
-        f"👤 Username: @{user[1]}\n🎖 Role: {user[3].capitalize()}\n📅 Joined: {user[4]}\n\n"
-        f"📊 <b>Lifetime Stats:</b>\n✅ Hits: {stats[2]}\n❌ Bad: {stats[3]}\n⚠️ Errors: {stats[4]}\n"
-        f"━━━━━━━━━━━━━━\nCredits: @akaza_isnt"
+        f"{role_icon} <b>Profile — {user[2]}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"  🆔 ID: <code>{user[0]}</code>\n"
+        f"  📛 Name: {user[2]}\n"
+        f"  👤 Username: @{user[1] or 'N/A'}\n"
+        f"  🎖 Role: <b>{user[3].upper()}</b>\n"
+        f"  📅 Joined: {user[4]}\n\n"
+        f"📊 <b>Lifetime Performance:</b>\n"
+        f"  ┌ 🔄 Total Checked: <code>{total:,}</code>\n"
+        f"  ├ 🎯 Hits: <code>{hits:,}</code>\n"
+        f"  ├ ❌ Bad: <code>{bad:,}</code>\n"
+        f"  ├ ⚠️ Errors: <code>{errors:,}</code>\n"
+        f"  └ 📈 Hit Rate: <code>{hit_rate:.1f}%</code>\n\n"
+        f"<i>Credits: @akaza_isnt</i>"
     )
     builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="📊 Detailed Stats", callback_data="my_stats"))
     builder.row(types.InlineKeyboardButton(text="🔙 Back", callback_data="back_to_main"))
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
 @dp.callback_query(F.data == "my_stats")
 async def process_my_stats(callback: types.CallbackQuery):
     stats = db.get_user_stats(callback.from_user.id)
+    total = stats[1] if stats else 0
+    hits = stats[2] if stats else 0
+    bad = stats[3] if stats else 0
+    errors = stats[4] if stats else 0
+    hit_rate = (hits / total * 100) if total > 0 else 0
+    good_rate = ((hits + bad) / total * 100) if total > 0 else 0
+    # Visual hit rate bar
+    bar_len = 20
+    filled = int(bar_len * hit_rate / 100)
+    bar = '█' * filled + '░' * (bar_len - filled)
     text = (
-        f"📊 <b>Your Statistics</b>\n━━━━━━━━━━━━━━\n"
-        f"🔄 Total Checked: {stats[1]}\n✅ Hits: {stats[2]}\n❌ Bad: {stats[3]}\n⚠️ Errors: {stats[4]}\n"
-        f"━━━━━━━━━━━━━━\nCredits: @akaza_isnt"
+        f"📊 <b>Detailed Statistics</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<b>Account Breakdown:</b>\n"
+        f"  ┌ 🔄 Total Checked: <code>{total:,}</code>\n"
+        f"  ├ 🎯 Hits: <code>{hits:,}</code>\n"
+        f"  ├ ❌ Bad: <code>{bad:,}</code>\n"
+        f"  └ ⚠️ Errors: <code>{errors:,}</code>\n\n"
+        f"<b>Performance:</b>\n"
+        f"  📈 Hit Rate: <code>{hit_rate:.2f}%</code>\n"
+        f"  [{bar}]\n"
+        f"  🎯 Valid Rate: <code>{good_rate:.1f}%</code>\n\n"
+        f"<i>Credits: @akaza_isnt</i>"
     )
     builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="👤 Profile", callback_data="profile"))
     builder.row(types.InlineKeyboardButton(text="🔙 Back", callback_data="back_to_main"))
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
@@ -84,15 +232,41 @@ async def process_my_stats(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "configure")
 async def process_configure(callback: types.CallbackQuery):
+    s = db.get_settings(callback.from_user.id)
+    # Count enabled capture modules
+    cap_fields = [
+        s.cap_hypixel_stats, s.cap_hypixel_plancke, s.cap_ban_check,
+        s.cap_optifine_cape, s.cap_name_change, s.cap_email_access,
+        s.cap_ms_balance, s.cap_rewards_points, s.cap_payment_methods,
+        s.cap_billing_address, s.cap_subscriptions, s.cap_donut_stats,
+        s.cap_inbox_scan, s.cap_buddy_pass, s.cap_save_cookies,
+        s.cap_auto_name, s.cap_auto_skin,
+    ]
+    enabled = sum(1 for c in cap_fields if c)
     builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="🎯 Capture Modules", callback_data="cfg_captures"))
-    builder.row(types.InlineKeyboardButton(text="📬 Inbox Keywords", callback_data="cfg_inbox"))
-    builder.row(types.InlineKeyboardButton(text="🔔 Discord Webhooks", callback_data="cfg_discord"))
-    builder.row(types.InlineKeyboardButton(text="🎮 Auto Name/Skin", callback_data="cfg_autoops"))
-    builder.row(types.InlineKeyboardButton(text="🌐 Auto Proxy", callback_data="cfg_proxy"))
-    builder.row(types.InlineKeyboardButton(text="⚡ Basic Settings", callback_data="cfg_basic"))
+    builder.row(
+        types.InlineKeyboardButton(text=f"🎯 Captures ({enabled}/17)", callback_data="cfg_captures"),
+        types.InlineKeyboardButton(text="⚡ Basic", callback_data="cfg_basic"),
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📬 Inbox", callback_data="cfg_inbox"),
+        types.InlineKeyboardButton(text="🔔 Webhooks", callback_data="cfg_discord"),
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="🎮 Auto Ops", callback_data="cfg_autoops"),
+        types.InlineKeyboardButton(text="🌐 Proxy", callback_data="cfg_proxy"),
+    )
     builder.row(types.InlineKeyboardButton(text="🔙 Back", callback_data="back_to_main"))
-    await callback.message.edit_text("⚙️ <b>Configuration</b>\nChoose a section:", parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.message.edit_text(
+        "⚙️ <b>Configuration Center</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📡 Capture modules: <b>{enabled}</b> active\n"
+        f"🧵 Threads: <b>{s.threads}</b>\n"
+        f"📦 Output: <b>{s.file_format.upper()}</b> / <b>{s.result_type.upper()}</b>\n"
+        f"🌐 Auto Proxy: <b>{'ON' if s.auto_proxy else 'OFF'}</b>\n\n"
+        "Select a category to configure:",
+        parse_mode="HTML", reply_markup=builder.as_markup()
+    )
 
 @dp.callback_query(F.data == "cfg_basic")
 async def cfg_basic(callback: types.CallbackQuery):
@@ -109,28 +283,44 @@ async def cfg_basic(callback: types.CallbackQuery):
 async def cfg_captures(callback: types.CallbackQuery):
     s = db.get_settings(callback.from_user.id)
     def _btn(label, col, val):
-        icon = "✅" if val else "❌"
+        icon = "🟢" if val else "🔴"
         return types.InlineKeyboardButton(text=f"{icon} {label}", callback_data=f"toggle_cap_{col}")
     builder = InlineKeyboardBuilder()
-    builder.row(_btn("Hypixel Stats", "cap_hypixel_stats", s.cap_hypixel_stats))
-    builder.row(_btn("Hypixel Plancke", "cap_hypixel_plancke", s.cap_hypixel_plancke))
-    builder.row(_btn("Ban Check", "cap_ban_check", s.cap_ban_check))
-    builder.row(_btn("Optifine Cape", "cap_optifine_cape", s.cap_optifine_cape))
-    builder.row(_btn("Name Change", "cap_name_change", s.cap_name_change))
-    builder.row(_btn("Email Access", "cap_email_access", s.cap_email_access))
-    builder.row(_btn("MS Balance", "cap_ms_balance", s.cap_ms_balance))
-    builder.row(_btn("Rewards Points", "cap_rewards_points", s.cap_rewards_points))
-    builder.row(_btn("Payment Methods", "cap_payment_methods", s.cap_payment_methods))
-    builder.row(_btn("Billing Address", "cap_billing_address", s.cap_billing_address))
-    builder.row(_btn("Subscriptions", "cap_subscriptions", s.cap_subscriptions))
-    builder.row(_btn("DonutSMP Stats", "cap_donut_stats", s.cap_donut_stats))
-    builder.row(_btn("Inbox Scan", "cap_inbox_scan", s.cap_inbox_scan))
-    builder.row(_btn("Buddy Pass", "cap_buddy_pass", s.cap_buddy_pass))
-    builder.row(_btn("Save Cookies", "cap_save_cookies", s.cap_save_cookies))
-    builder.row(_btn("Auto Name", "cap_auto_name", s.cap_auto_name))
+    builder.row(_btn("Hypixel Stats", "cap_hypixel_stats", s.cap_hypixel_stats),
+                _btn("Plancke", "cap_hypixel_plancke", s.cap_hypixel_plancke))
+    builder.row(_btn("Ban Check", "cap_ban_check", s.cap_ban_check),
+                _btn("OF Cape", "cap_optifine_cape", s.cap_optifine_cape))
+    builder.row(_btn("Name Change", "cap_name_change", s.cap_name_change),
+                _btn("Email Access", "cap_email_access", s.cap_email_access))
+    builder.row(_btn("MS Balance", "cap_ms_balance", s.cap_ms_balance),
+                _btn("Rewards", "cap_rewards_points", s.cap_rewards_points))
+    builder.row(_btn("Payments", "cap_payment_methods", s.cap_payment_methods),
+                _btn("Billing", "cap_billing_address", s.cap_billing_address))
+    builder.row(_btn("Subs", "cap_subscriptions", s.cap_subscriptions),
+                _btn("DonutSMP", "cap_donut_stats", s.cap_donut_stats))
+    builder.row(_btn("Inbox Scan", "cap_inbox_scan", s.cap_inbox_scan),
+                _btn("Buddy Pass", "cap_buddy_pass", s.cap_buddy_pass))
+    builder.row(_btn("Cookies", "cap_save_cookies", s.cap_save_cookies),
+                _btn("Auto Name", "cap_auto_name", s.cap_auto_name))
     builder.row(_btn("Auto Skin", "cap_auto_skin", s.cap_auto_skin))
+    cap_fields = [
+        s.cap_hypixel_stats, s.cap_hypixel_plancke, s.cap_ban_check,
+        s.cap_optifine_cape, s.cap_name_change, s.cap_email_access,
+        s.cap_ms_balance, s.cap_rewards_points, s.cap_payment_methods,
+        s.cap_billing_address, s.cap_subscriptions, s.cap_donut_stats,
+        s.cap_inbox_scan, s.cap_buddy_pass, s.cap_save_cookies,
+        s.cap_auto_name, s.cap_auto_skin,
+    ]
+    enabled = sum(1 for c in cap_fields if c)
     builder.row(types.InlineKeyboardButton(text="🔙 Back", callback_data="configure"))
-    await callback.message.edit_text("🎯 <b>Capture Modules</b>\nToggle which data to capture:", parse_mode="HTML", reply_markup=builder.as_markup())
+    await callback.message.edit_text(
+        f"🎯 <b>Capture Modules</b> — {enabled}/17 active\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Toggle modules to customize what data\n"
+        f"gets captured for each account hit.\n\n"
+        f"🟢 = Enabled  🔴 = Disabled",
+        parse_mode="HTML", reply_markup=builder.as_markup()
+    )
 
 @dp.callback_query(F.data.startswith("toggle_cap_"))
 async def toggle_capture_module(callback: types.CallbackQuery):
@@ -350,17 +540,37 @@ async def admin_panel(callback: types.CallbackQuery):
     global_stats = db.get_global_stats()
     users = db.get_all_users()
     pending = [u for u in users if u[2] == 'pending']
+    authorized = [u for u in users if u[2] == 'authorized']
+    banned = [u for u in users if u[2] == 'banned']
+    g_total = global_stats[1] if global_stats else 0
+    g_hits = global_stats[2] if global_stats else 0
+    g_bad = global_stats[3] if global_stats else 0
+    g_errors = global_stats[4] if global_stats else 0
+    g_rate = (g_hits / g_total * 100) if g_total > 0 else 0
     text = (
-        f"👑 <b>Admin Control Panel</b>\n━━━━━━━━━━━━━━\n"
-        f"🌍 <b>Global Stats:</b>\n🔄 Total: {global_stats[1]}\n✅ Hits: {global_stats[2]}\n"
-        f"❌ Bad: {global_stats[3]}\n⚠️ Errors: {global_stats[4]}\n\n"
-        f"👥 Users: {len(users)} | ⏳ Pending: {len(pending)}\n━━━━━━━━━━━━━━"
+        f"👑 <b>Admin Control Panel</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🌍 <b>Global Statistics:</b>\n"
+        f"  ┌ 🔄 Total Checked: <code>{g_total:,}</code>\n"
+        f"  ├ 🎯 Hits: <code>{g_hits:,}</code>\n"
+        f"  ├ ❌ Bad: <code>{g_bad:,}</code>\n"
+        f"  ├ ⚠️ Errors: <code>{g_errors:,}</code>\n"
+        f"  └ 📈 Hit Rate: <code>{g_rate:.2f}%</code>\n\n"
+        f"👥 <b>User Breakdown:</b>\n"
+        f"  ├ Total: <b>{len(users)}</b>\n"
+        f"  ├ ✅ Authorized: <b>{len(authorized)}</b>\n"
+        f"  ├ ⏳ Pending: <b>{len(pending)}</b>\n"
+        f"  └ 🚫 Banned: <b>{len(banned)}</b>\n"
     )
     builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="⏳ Manage Pending", callback_data="manage_pending"))
-    builder.row(types.InlineKeyboardButton(text="🚫 Ban/Unban User", callback_data="admin_ban_user"))
-    builder.row(types.InlineKeyboardButton(text="👥 User List", callback_data="admin_user_list"))
-    builder.row(types.InlineKeyboardButton(text="📢 Broadcast", callback_data="admin_broadcast"))
+    builder.row(
+        types.InlineKeyboardButton(text=f"⏳ Pending ({len(pending)})", callback_data="manage_pending"),
+        types.InlineKeyboardButton(text="🚫 Ban/Unban", callback_data="admin_ban_user"),
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="👥 Users", callback_data="admin_user_list"),
+        types.InlineKeyboardButton(text="📢 Broadcast", callback_data="admin_broadcast"),
+    )
     builder.row(types.InlineKeyboardButton(text="🔙 Back", callback_data="back_to_main"))
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
@@ -404,13 +614,16 @@ async def admin_user_list(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         return
     users = db.get_all_users()
-    lines = ["👥 <b>User List</b>\n━━━━━━━━━━━━━━"]
-    for u in users[:30]:  # Show max 30
+    role_icons = {'admin': '👑', 'authorized': '✅', 'pending': '⏳', 'banned': '🚫'}
+    lines = ["👥 <b>User List</b>", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━", ""]
+    for u in users[:30]:
         stats = db.get_user_stats(u[0])
         hits = stats[2] if stats else 0
-        lines.append(f"• @{u[1] or 'N/A'} ({u[0]}) — {u[2]} — Hits: {hits}")
+        total = stats[1] if stats else 0
+        icon = role_icons.get(u[2], '❓')
+        lines.append(f"{icon} @{u[1] or 'N/A'} — <code>{hits:,}</code> hits / <code>{total:,}</code> total")
     if len(users) > 30:
-        lines.append(f"... and {len(users) - 30} more")
+        lines.append(f"\n<i>... and {len(users) - 30} more users</i>")
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel"))
     await callback.message.edit_text('\n'.join(lines), parse_mode="HTML", reply_markup=builder.as_markup())
@@ -424,7 +637,22 @@ async def admin_broadcast(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "back_to_main")
 async def back_to_main(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    stats = db.get_user_stats(user_id)
+    total = stats[1] if stats else 0
+    hits = stats[2] if stats else 0
+    user = db.get_user(user_id)
+    role_badge = '👑' if user and user[3] == 'admin' else '⭐'
     await callback.message.edit_text(
-        f"🚀 <b>Ultimate Minecraft Checker Bot</b>\n\nWelcome back, {callback.from_user.first_name}!\n\nCredits: @akaza_isnt",
-        parse_mode="HTML", reply_markup=get_main_keyboard(callback.from_user.id)
+        f"╔══════════════════════════╗\n"
+        f"  ⚡ <b>Ultimate MC Checker v{VERSION}</b>\n"
+        f"╚══════════════════════════╝\n\n"
+        f"Welcome back, <b>{callback.from_user.first_name}</b>! {role_badge}\n\n"
+        f"📊 <b>Quick Stats:</b>\n"
+        f"  ├ 🔄 Checked: <code>{total:,}</code>\n"
+        f"  ├ 🎯 Hits: <code>{hits:,}</code>\n"
+        f"  └ 📈 Hit Rate: <code>{(hits/total*100) if total > 0 else 0:.1f}%</code>\n\n"
+        f"📎 Send a <b>.txt combo file</b> to start checking!\n\n"
+        f"<i>Credits: @akaza_isnt</i>",
+        parse_mode="HTML", reply_markup=get_main_keyboard(user_id)
     )
