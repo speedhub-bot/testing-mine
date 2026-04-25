@@ -11,17 +11,9 @@ _SUBSTRATE_SCOPE_ALT = 'service::outlook.office.com::MBI_SSL'
 _SUBSTRATE_REDIRECT = 'https://login.live.com/oauth20_desktop.srf'
 _SEARCH_URL = 'https://outlook.live.com/search/api/v2/query?n=124&cv=tNZ1DVP5NhDwG%2FDUCelaIu.124'
 
-_TOKEN_CACHE = {}
-_TOKEN_CACHE_TTL = 300
-
-
 def _get_substrate_token(session, config: dict) -> str | None:
+    """Get a per-session substrate token (no global cache — each account needs its own)."""
     import time
-    cache_key = f'{_SUBSTRATE_CLIENT_ID}:{_SUBSTRATE_SCOPE}'
-    if cache_key in _TOKEN_CACHE:
-        ts, tok = _TOKEN_CACHE[cache_key]
-        if time.time() - ts < _TOKEN_CACHE_TTL:
-            return tok
 
     timeout = int(config.get('timeout', 15))
 
@@ -35,7 +27,6 @@ def _get_substrate_token(session, config: dict) -> str | None:
             r = session.get(auth_url, timeout=timeout)
             token = parse_qs(urlparse(r.url).fragment).get('access_token', [None])[0]
             if token:
-                _TOKEN_CACHE[cache_key] = (time.time(), token)
                 return token
         except Exception:
             continue

