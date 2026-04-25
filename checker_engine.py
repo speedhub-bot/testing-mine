@@ -99,53 +99,82 @@ class CaptureObject:
 
     def builder(self) -> str:
         """Build a formatted Capture.txt block for this account."""
+        sep = '─' * 40
         lines = [
-            f'Email: {self.email}',
-            f'Password: {self.password}',
-            f'Name: {self.name}',
-            f'Capes: {self.capes}',
-            f'Account Type: {self.type}',
+            sep,
+            f'  Account: {self.email}:{self.password}',
+            f'  Name: {self.name}  |  UUID: {self.uuid or "N/A"}',
+            f'  Type: {self.type}  |  Capes: {self.capes or "None"}',
+            sep,
         ]
-        if self.hypixl:       lines.append(f'Hypixel: {self.hypixl}')
-        if self.level:        lines.append(f'Hypixel Level: {self.level}')
-        if self.firstlogin:   lines.append(f'First Hypixel Login: {self.firstlogin}')
-        if self.lastlogin:    lines.append(f'Last Hypixel Login: {self.lastlogin}')
-        if self.bwstars:      lines.append(f'Bedwars Stars: {self.bwstars}')
-        if self.swstars:      lines.append(f'Skywars Stars: {self.swstars}')
-        if self.sbcoins:      lines.append(f'Skyblock Coins: {self.sbcoins}')
-        if self.sbnetworth:   lines.append(f'Skyblock Networth: {self.sbnetworth}')
-        if self.pitcoins:     lines.append(f'Pit Gold: {self.pitcoins}')
-        if self.sb_lvl:       lines.append(f'Skyblock Level: {self.sb_lvl}')
-        if self.sb_items:     lines.append(f'Skyblock Items: {self.sb_items}')
-        if self.banned is not None: lines.append(f'Hypixel Banned: {self.banned}')
-        if self.cape:         lines.append(f'Optifine Cape: {self.cape}')
-        if self.access:       lines.append(f'Email Access: {self.access}')
-        if self.namechanged:  lines.append(f'Can Change Name: {self.namechanged}')
-        if self.lastchanged:  lines.append(f'Last Name Change: {self.lastchanged}')
-        if self.ms_balance:   lines.append(f'MS Balance: {self.ms_balance}')
-        if self.ms_rewards:   lines.append(f'Rewards Points: {self.ms_rewards}')
+
+        # Hypixel section
+        hypixel_fields = []
+        if self.hypixl:       hypixel_fields.append(f'  Rank: {self.hypixl}')
+        if self.level:        hypixel_fields.append(f'  Level: {self.level}')
+        if self.bwstars:      hypixel_fields.append(f'  Bedwars Stars: {self.bwstars}')
+        if self.swstars:      hypixel_fields.append(f'  Skywars Stars: {self.swstars}')
+        if self.sbnetworth:   hypixel_fields.append(f'  Skyblock NW: {self.sbnetworth}')
+        if self.sbcoins:      hypixel_fields.append(f'  Skyblock Coins: {self.sbcoins}')
+        if self.sb_lvl:       hypixel_fields.append(f'  Skyblock Level: {self.sb_lvl}')
+        if self.sb_items:     hypixel_fields.append(f'  Skyblock Items: {self.sb_items}')
+        if self.pitcoins:     hypixel_fields.append(f'  Pit Gold: {self.pitcoins}')
+        if self.firstlogin:   hypixel_fields.append(f'  First Login: {self.firstlogin}')
+        if self.lastlogin:    hypixel_fields.append(f'  Last Login: {self.lastlogin}')
+        if self.banned is not None:
+            hypixel_fields.append(f'  Banned: {self.banned}')
+        if hypixel_fields:
+            lines.append('  [HYPIXEL]')
+            lines.extend(hypixel_fields)
+
+        # Account features
+        features = []
+        if self.cape:         features.append(f'  Optifine Cape: {self.cape}')
+        if self.namechanged:  features.append(f'  Name Change Available: {self.namechanged}')
+        if self.lastchanged:  features.append(f'  Last Name Change: {self.lastchanged}')
+        if self.access:       features.append(f'  Email Access: {self.access}')
+        if features:
+            lines.append('  [ACCOUNT]')
+            lines.extend(features)
+
+        # Microsoft section
+        ms_fields = []
+        if self.ms_balance:   ms_fields.append(f'  Balance: {self.ms_balance}')
+        if self.ms_rewards:   ms_fields.append(f'  Rewards Points: {self.ms_rewards}')
         if self.ms_payment_methods:
-            lines.append(f'Payment Methods: {", ".join(self.ms_payment_methods)}')
+            ms_fields.append(f'  Payment Methods: {", ".join(self.ms_payment_methods)}')
         if self.ms_billing_addresses:
-            lines.append(f'Billing Address: {"; ".join(self.ms_billing_addresses)}')
+            ms_fields.append(f'  Billing: {"; ".join(self.ms_billing_addresses)}')
         if self.ms_subscriptions:
-            lines.append(f'Subscriptions: {", ".join(self.ms_subscriptions)}')
-        if self.donut_money:  lines.append(f'DonutSMP Money: {self.donut_money}')
-        if self.donut_kills:  lines.append(f'DonutSMP Kills: {self.donut_kills}')
-        if self.donut_deaths: lines.append(f'DonutSMP Deaths: {self.donut_deaths}')
-        if self.donut_mobs_killed: lines.append(f'DonutSMP Mobs Killed: {self.donut_mobs_killed}')
-        if self.donut_playtime: lines.append(f'DonutSMP Playtime: {self.donut_playtime}')
-        if self.donut_shards: lines.append(f'DonutSMP Shards: {self.donut_shards}')
-        if self.donut_broken_blocks: lines.append(f'DonutSMP Broken Blocks: {self.donut_broken_blocks}')
-        if self.donut_placed_blocks: lines.append(f'DonutSMP Placed Blocks: {self.donut_placed_blocks}')
-        if self.donut_money_made_from_sell: lines.append(f'DonutSMP Money From Sell: {self.donut_money_made_from_sell}')
-        if self.donut_money_spent_on_shop: lines.append(f'DonutSMP Money Spent: {self.donut_money_spent_on_shop}')
+            ms_fields.append(f'  Subscriptions: {", ".join(self.ms_subscriptions)}')
+        if ms_fields:
+            lines.append('  [MICROSOFT]')
+            lines.extend(ms_fields)
+
+        # DonutSMP section
+        donut_fields = []
+        if self.donut_money:  donut_fields.append(f'  Money: {self.donut_money}')
+        if self.donut_kills:  donut_fields.append(f'  Kills: {self.donut_kills}')
+        if self.donut_deaths: donut_fields.append(f'  Deaths: {self.donut_deaths}')
+        if self.donut_mobs_killed: donut_fields.append(f'  Mobs Killed: {self.donut_mobs_killed}')
+        if self.donut_playtime: donut_fields.append(f'  Playtime: {self.donut_playtime}')
+        if self.donut_shards: donut_fields.append(f'  Shards: {self.donut_shards}')
+        if self.donut_broken_blocks: donut_fields.append(f'  Broken Blocks: {self.donut_broken_blocks}')
+        if self.donut_placed_blocks: donut_fields.append(f'  Placed Blocks: {self.donut_placed_blocks}')
+        if self.donut_money_made_from_sell: donut_fields.append(f'  Money From Sell: {self.donut_money_made_from_sell}')
+        if self.donut_money_spent_on_shop: donut_fields.append(f'  Money Spent: {self.donut_money_spent_on_shop}')
+        if donut_fields:
+            lines.append('  [DONUTSMP]')
+            lines.extend(donut_fields)
+
+        # Extra captures
         if self.inbox_matches:
             inbox_str = ', '.join(f'{k}({v})' for k, v in self.inbox_matches)
-            lines.append(f'Inbox Matches: {inbox_str}')
+            lines.append(f'  [INBOX] {inbox_str}')
         if self.buddy_codes:
-            lines.append(f'Buddy Pass Codes: {", ".join(self.buddy_codes)}')
-        lines.append('============================')
+            lines.append(f'  [BUDDY PASS] {", ".join(self.buddy_codes)}')
+
+        lines.append(sep)
         return '\n'.join(lines) + '\n'
 
     def hits_line(self) -> str:
@@ -154,15 +183,26 @@ class CaptureObject:
         if self.name and self.name != 'N/A':
             parts.append(f'Name: {self.name}')
         parts.append(f'Type: {self.type}')
+        if self.capes and self.capes != 'None':
+            parts.append(f'Capes: {self.capes}')
         if self.hypixl:     parts.append(f'Hypixel: {self.hypixl}')
         if self.bwstars:    parts.append(f'BW: {self.bwstars}')
+        if self.swstars:    parts.append(f'SW: {self.swstars}')
         if self.sbnetworth: parts.append(f'NW: {self.sbnetworth}')
+        if self.sb_lvl:     parts.append(f'SB_Lvl: {self.sb_lvl}')
         if self.banned is not None:
             parts.append(f'Banned: {self.banned}')
+        if self.cape:       parts.append(f'OF_Cape: {self.cape}')
+        if self.access:     parts.append(f'Email: {self.access}')
         if self.ms_balance: parts.append(f'Balance: {self.ms_balance}')
         if self.ms_rewards: parts.append(f'Rewards: {self.ms_rewards}')
+        if self.ms_payment_methods:
+            parts.append(f'Payments: {len(self.ms_payment_methods)}')
+        if self.donut_money: parts.append(f'Donut$: {self.donut_money}')
         if self.buddy_codes:
             parts.append(f'Codes: {len(self.buddy_codes)}')
+        if self.inbox_matches:
+            parts.append(f'Inbox: {len(self.inbox_matches)}')
         return ' | '.join(parts)
 
 
@@ -230,6 +270,14 @@ class CheckerEngine:
 
     # ---------------------------------------------------------------- UI
 
+    @staticmethod
+    def _fmt_time(seconds):
+        if seconds < 60:
+            return f'{int(seconds)}s'
+        if seconds < 3600:
+            return f'{int(seconds // 60)}m {int(seconds % 60)}s'
+        return f'{int(seconds // 3600)}h {int((seconds % 3600) // 60)}m'
+
     async def update_ui(self, msg_obj):
         while self.is_running:
             if self.checked >= self.total > 0:
@@ -237,23 +285,29 @@ class CheckerEngine:
             elapsed = time.time() - self.start_time
             cpm = int((self.checked / elapsed) * 60) if elapsed > 0 else 0
             progress = (self.checked / self.total * 100) if self.total > 0 else 0
-            bar_len = 15
+            hit_rate = (self.hits / self.checked * 100) if self.checked > 0 else 0
+            remaining = self.total - self.checked
+            eta = (remaining / (self.checked / elapsed)) if self.checked > 0 and elapsed > 0 else 0
+            bar_len = 20
             filled = int(bar_len * progress / 100)
-            bar = '🟩' * filled + '⬜' * (bar_len - filled)
+            bar = '█' * filled + '░' * (bar_len - filled)
             text = (
-                f'🚀 <b>Checking Progress</b>\n'
-                f'━━━━━━━━━━━━━━━━━━\n'
-                f'✅ Hits: {self.hits}\n'
-                f'❌ Bad: {self.bad}\n'
-                f'🔐 2FA: {self.twofa}\n'
-                f'📧 Valid Mail: {self.valid_mail}\n'
-                f'⚠️ Errors: {self.errors}\n'
-                f'🔄 Checked: {self.checked}/{self.total}\n'
-                f'📈 Progress: [{bar}] {progress:.1f}%\n'
-                f'⚡ CPM: {cpm}\n'
-                f'⏱ Elapsed: {int(elapsed)}s\n'
-                f'━━━━━━━━━━━━━━━━━━\n'
-                f'Credits: @akaza_isnt'
+                f'⚡ <b>Checking in Progress</b>\n'
+                f'━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+                f'<code>[{bar}] {progress:.1f}%</code>\n\n'
+                f'<b>Results:</b>\n'
+                f'  ┌ 🎯 Hits: <code>{self.hits}</code>\n'
+                f'  ├ ❌ Bad: <code>{self.bad}</code>\n'
+                f'  ├ 🔐 2FA: <code>{self.twofa}</code>\n'
+                f'  ├ 📧 Valid Mail: <code>{self.valid_mail}</code>\n'
+                f'  └ ⚠️ Errors: <code>{self.errors}</code>\n\n'
+                f'<b>Speed:</b>\n'
+                f'  ├ 🔄 Progress: <code>{self.checked}/{self.total}</code>\n'
+                f'  ├ ⚡ CPM: <code>{cpm:,}</code>\n'
+                f'  ├ 📈 Hit Rate: <code>{hit_rate:.1f}%</code>\n'
+                f'  ├ ⏱ Elapsed: <code>{self._fmt_time(elapsed)}</code>\n'
+                f'  └ 🏁 ETA: <code>{self._fmt_time(eta)}</code>\n\n'
+                f'<i>Credits: @akaza_isnt</i>'
             )
             try:
                 await msg_obj.edit_text(text, parse_mode='HTML')
