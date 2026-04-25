@@ -109,7 +109,7 @@ class Database:
                     hit_notifications INTEGER DEFAULT 1,
                     result_type TEXT DEFAULT 'all',
                     file_format TEXT DEFAULT 'txt',
-                    threads INTEGER DEFAULT 25,
+                    threads INTEGER DEFAULT 5,
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
             ''')
@@ -292,7 +292,7 @@ class Database:
             'hit_notifications':    bool(s.hit_notifications),
             'result_type':          s.result_type or 'all',
             'file_format':          s.file_format or 'txt',
-            'threads':              int(s.threads or 25),
+            'threads':              min(int(s.threads or 5), 20),
             'timeout':              15,
             'max_retries':          3,
         }

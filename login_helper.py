@@ -32,7 +32,7 @@ def microsoft_login(session, email, password):
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
         }
 
-        resp = session.get(sFTTag_url, headers=headers, timeout=10)
+        resp = session.get(sFTTag_url, headers=headers, timeout=15)
 
         sft_match = RE_SFTTAG_VALUE.search(resp.text)
         if not sft_match:
@@ -56,7 +56,7 @@ def microsoft_login(session, email, password):
             'PPFT': sFTTag
         }
 
-        login_resp = session.post(urlPost, data=data, headers=headers, allow_redirects=True, timeout=10)
+        login_resp = session.post(urlPost, data=data, headers=headers, allow_redirects=True, timeout=15)
 
         if '#' in login_resp.url:
             token = parse_qs(urlparse(login_resp.url).fragment).get('access_token', [None])[0]

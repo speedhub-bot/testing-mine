@@ -65,6 +65,7 @@ def checkmc(
     capture_obj,
     send_xbox_webhook=None,
     send_other_webhook=None,
+    engine=None,
 ) -> bool:
     """
     Check Minecraft entitlements and populate capture_obj with identity fields.
@@ -81,16 +82,18 @@ def checkmc(
                 'https://api.minecraftservices.com/entitlements/license',
                 headers={'Authorization': f'Bearer {token}'},
                 verify=False,
-                timeout=10,
+                timeout=15,
             )
             if checkrq.status_code == 429:
+                if engine:
+                    engine._report_rate_limit()
                 session.proxies = getproxy()
-                time.sleep(1 if not proxylist else 0.1)
+                time.sleep(2 + attempts)
                 continue
             break
         except Exception:
             session.proxies = getproxy()
-            time.sleep(0.1)
+            time.sleep(1 + attempts * 0.5)
             continue
 
     if checkrq is None or checkrq.status_code != 200:
