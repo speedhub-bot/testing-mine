@@ -410,6 +410,7 @@ class CheckerEngine:
                     self.write_dedupe(self.results_dir, '2fa.txt', f'{_account_label(email)}\n')
                     with self.lock:
                         self.twofa += 1
+                        self.checked += 1
                     self.db.update_stats(self.user_id, errors=1)
                     session.close()
                     return
