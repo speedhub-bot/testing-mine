@@ -11,7 +11,7 @@ This fork removes bulk combo checking, proxy rotation, Discord hit reporting, in
    pip install -r requirements.txt
    ```
 
-2. (Optional) Override the built-in defaults via environment variables:
+2. Set the required Telegram bot token and optional admin override:
    ```bash
    export BOT_TOKEN="your-telegram-bot-token"
    export ADMIN_ID="your-telegram-user-id"

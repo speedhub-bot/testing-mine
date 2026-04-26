@@ -6,7 +6,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import Database
 
-TOKEN = os.getenv("BOT_TOKEN", "8459126546:AAHN9oT3OzcM74yHPINr7mjJWHTyYbvkn_g")
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    raise RuntimeError("BOT_TOKEN environment variable is required")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "5944410248"))
 
 bot = Bot(token=TOKEN)
@@ -31,6 +33,10 @@ def get_main_keyboard(user_id):
     if user_id == ADMIN_ID:
         builder.row(types.InlineKeyboardButton(text="👑 Admin Panel", callback_data="admin_panel"))
     return builder.as_markup()
+
+
+def _list_user_role(user):
+    return user[3]
 
 
 def _home_text(first_name, total, hits, role):
@@ -301,9 +307,9 @@ async def admin_panel(callback: types.CallbackQuery):
         return
     global_stats = db.get_global_stats()
     users = db.get_all_users()
-    pending = [u for u in users if u[2] == 'pending']
-    authorized = [u for u in users if u[2] == 'authorized']
-    banned = [u for u in users if u[2] == 'banned']
+    pending = [u for u in users if _list_user_role(u) == 'pending']
+    authorized = [u for u in users if _list_user_role(u) == 'authorized']
+    banned = [u for u in users if _list_user_role(u) == 'banned']
     g_total = global_stats[1] if global_stats else 0
     g_hits = global_stats[2] if global_stats else 0
     g_bad = global_stats[3] if global_stats else 0
@@ -339,7 +345,7 @@ async def admin_panel(callback: types.CallbackQuery):
 async def manage_pending(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         return
-    pending = [u for u in db.get_all_users() if u[2] == 'pending']
+    pending = [u for u in db.get_all_users() if _list_user_role(u) == 'pending']
     if not pending:
         await callback.answer("No pending requests.", show_alert=True)
         return
@@ -383,7 +389,7 @@ async def admin_user_list(callback: types.CallbackQuery):
         stats = db.get_user_stats(u[0])
         hits = stats[2] if stats else 0
         total = stats[1] if stats else 0
-        icon = role_icons.get(u[2], '❓')
+        icon = role_icons.get(_list_user_role(u), '❓')
         lines.append(f"{icon} @{u[1] or 'N/A'} — <code>{hits:,}</code> Minecraft / <code>{total:,}</code> checked")
     if len(users) > 30:
         lines.append(f"\n<i>... and {len(users) - 30} more users</i>")

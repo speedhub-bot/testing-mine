@@ -152,7 +152,7 @@ class Database:
         with self.lock:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
-            cursor.execute('SELECT user_id, username, role FROM users')
+            cursor.execute('SELECT user_id, username, full_name, role, joined_at FROM users')
             users = cursor.fetchall()
             conn.close()
             return users
@@ -234,8 +234,8 @@ class Database:
 
     # ------------------------------------------------------------------ stats
 
-    def update_stats(self, user_id, hits=0, bad=0, errors=0):
-        total = hits + bad + errors
+    def update_stats(self, user_id, hits=0, bad=0, errors=0, total_checked=None):
+        total = hits + bad + errors if total_checked is None else total_checked
         with self.lock:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()

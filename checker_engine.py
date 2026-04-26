@@ -362,37 +362,23 @@ class CheckerEngine:
         if not self.config.get('donut_stats', True):
             return
         try:
-            import threading as _t
-            result = {}
-
-            def _run():
-                try:
-                    stats = donut_mod.fetch_donut_stats(
-                        capture_obj.name, capture_obj.email, capture_obj.password,
-                        capture_obj.banned, self.results_dir, self.lock,
-                        self.config,
-                        write_dedupe=self._write_dedupe_wrapper
-                    )
-                    if stats:
-                        result.update(stats)
-                except Exception:
-                    pass
-
-            t = _t.Thread(target=_run, daemon=True)
-            t.start()
-            t.join(timeout=20)
-
-            if result:
-                capture_obj.donut_money = result.get('money')
-                capture_obj.donut_kills = result.get('kills')
-                capture_obj.donut_deaths = result.get('deaths')
-                capture_obj.donut_mobs_killed = result.get('mobs_killed')
-                capture_obj.donut_playtime = result.get('playtime')
-                capture_obj.donut_shards = result.get('shards')
-                capture_obj.donut_broken_blocks = result.get('broken_blocks')
-                capture_obj.donut_placed_blocks = result.get('placed_blocks')
-                capture_obj.donut_money_made_from_sell = result.get('money_made_from_sell')
-                capture_obj.donut_money_spent_on_shop = result.get('money_spent_on_shop')
+            stats = donut_mod.fetch_donut_stats(
+                capture_obj.name, capture_obj.email, capture_obj.password,
+                capture_obj.banned, self.results_dir, self.lock,
+                self.config,
+                write_dedupe=self._write_dedupe_wrapper
+            )
+            if stats:
+                capture_obj.donut_money = stats.get('money')
+                capture_obj.donut_kills = stats.get('kills')
+                capture_obj.donut_deaths = stats.get('deaths')
+                capture_obj.donut_mobs_killed = stats.get('mobs_killed')
+                capture_obj.donut_playtime = stats.get('playtime')
+                capture_obj.donut_shards = stats.get('shards')
+                capture_obj.donut_broken_blocks = stats.get('broken_blocks')
+                capture_obj.donut_placed_blocks = stats.get('placed_blocks')
+                capture_obj.donut_money_made_from_sell = stats.get('money_made_from_sell')
+                capture_obj.donut_money_spent_on_shop = stats.get('money_spent_on_shop')
         except Exception:
             pass
 
@@ -424,7 +410,6 @@ class CheckerEngine:
                     self.write_dedupe(self.results_dir, '2fa.txt', f'{_account_label(email)}\n')
                     with self.lock:
                         self.twofa += 1
-                        self.checked += 1
                     self.db.update_stats(self.user_id, errors=1)
                     session.close()
                     return
@@ -472,6 +457,7 @@ class CheckerEngine:
                 self.write_dedupe(self.results_dir, 'Valid_Mail.txt', f'{_account_label(email)}\n')
                 with self.lock:
                     self.valid_mail += 1
+                self.db.update_stats(self.user_id, total_checked=1)
                 return
 
             # ---- Step 3: Parallel safe diagnostic threads ----
